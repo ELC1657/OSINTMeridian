@@ -398,7 +398,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.14.0",
+            "version": "0.14.1",
             "modules": {},
         }
 

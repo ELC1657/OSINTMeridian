@@ -1,4 +1,4 @@
-# Meridian
+# Meridian v0.14.1
 
 Passive recon aggregator for penetration testers. Type a target, get results from every source simultaneously in a live terminal UI - no browser tabs, no manual copy-paste.
 

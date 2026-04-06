@@ -42,6 +42,7 @@ class DNSModule(ReconModule):
         tasks = [asyncio.create_task(_resolve(resolver, domain, rt)) for rt in _RECORD_TYPES]
 
         for task in asyncio.as_completed(tasks):
+            rtype = "?"
             try:
                 rtype, answers = await task
             except dns.resolver.NXDOMAIN:
