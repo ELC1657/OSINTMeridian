@@ -5,12 +5,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
-from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
+from textual.theme import Theme
 from textual.widgets import Footer, Header, RichLog, Static
 
 from .modules import (
@@ -26,7 +26,51 @@ from .modules import (
 )
 
 
-# ─── Panel widget ────────────────────────────────────────────────────────────
+# ── Custom themes ─────────────────────────────────────────────────────────────
+
+MATRIX_THEME = Theme(
+    name="matrix",
+    primary="#00FF41",
+    secondary="#008F11",
+    accent="#00FF41",
+    warning="#FFD700",
+    error="#FF3131",
+    success="#00FF41",
+    background="#0D0D0D",
+    surface="#111111",
+    panel="#1A1A1A",
+    dark=True,
+)
+
+BLOOD_THEME = Theme(
+    name="blood",
+    primary="#FF3131",
+    secondary="#8B0000",
+    accent="#FF6B6B",
+    warning="#FFD700",
+    error="#FF0000",
+    success="#00FF41",
+    background="#0D0000",
+    surface="#1A0000",
+    panel="#2A0000",
+    dark=True,
+)
+
+THEMES: list[tuple[str, str]] = [
+    ("matrix",           "Matrix"),
+    ("blood",            "Blood"),
+    ("nord",             "Nord"),
+    ("gruvbox",          "Gruvbox"),
+    ("catppuccin-mocha", "Catppuccin"),
+    ("dracula",          "Dracula"),
+    ("tokyo-night",      "Tokyo Night"),
+    ("monokai",          "Monokai"),
+    ("rose-pine",        "Rose Pine"),
+    ("textual-dark",     "Default Dark"),
+]
+
+
+# ── Panel widget ──────────────────────────────────────────────────────────────
 
 class ReconPanel(Vertical):
     """A scrollable panel that streams findings from one recon module."""
@@ -34,19 +78,21 @@ class ReconPanel(Vertical):
     DEFAULT_CSS = """
     ReconPanel {
         height: 1fr;
-        border: solid #1e1e2e;
+        border: solid $surface-lighten-2;
     }
     ReconPanel .panel-header {
         height: 1;
-        background: #11111b;
-        color: #4a9eff;
+        background: $panel;
+        color: $primary;
         padding: 0 1;
         text-style: bold;
     }
     ReconPanel RichLog {
         height: 1fr;
-        background: #0d0d0d;
+        background: $background;
         padding: 0 1;
+        scrollbar-color: $primary-darken-3;
+        scrollbar-background: $background;
         scrollbar-size: 1 1;
     }
     """
@@ -65,13 +111,11 @@ class ReconPanel(Vertical):
         super().__init__(id=f"panel-{panel_id}", **kwargs)
         self._title = title
         self._pid = panel_id
-        self._findings: list[str] = []  # plain text, for export
+        self._findings: list[str] = []
 
     def compose(self) -> ComposeResult:
         yield Static(self._render_header(), id=f"hdr-{self._pid}", classes="panel-header")
         yield RichLog(id=f"log-{self._pid}", highlight=True, markup=True, wrap=True)
-
-    # ── Reactive watchers ────────────────────────────────────────────────────
 
     def _render_header(self) -> str:
         icon = self._STATUS_ICONS.get(self.status, "○")
@@ -86,8 +130,6 @@ class ReconPanel(Vertical):
 
     def watch_count(self, _: int) -> None:
         self.watch_status(self.status)
-
-    # ── Public API ───────────────────────────────────────────────────────────
 
     def write_finding(self, finding: Finding) -> None:
         self.query_one(RichLog).write(finding.format_rich())
@@ -117,7 +159,7 @@ class ReconPanel(Vertical):
         return list(self._findings)
 
 
-# ─── Main app ────────────────────────────────────────────────────────────────
+# ── Main app ──────────────────────────────────────────────────────────────────
 
 class MeridianApp(App[None]):
     """Meridian - Offensive Recon Aggregator"""
@@ -126,22 +168,22 @@ class MeridianApp(App[None]):
 
     CSS = """
     Screen {
-        background: #0d0d0d;
-        color: #e0e0e0;
+        background: $background;
+        color: $text;
     }
 
     Header {
-        background: #0a0a0a;
-        color: #00ff41;
+        background: $panel;
+        color: $primary;
         text-style: bold;
     }
 
     #status-bar {
         height: 1;
-        background: #111111;
-        color: #666666;
+        background: $panel;
+        color: $text-muted;
         padding: 0 2;
-        border-bottom: solid #1a1a1a;
+        border-bottom: solid $surface-lighten-1;
         content-align: left middle;
     }
 
@@ -152,7 +194,7 @@ class MeridianApp(App[None]):
     .col {
         width: 1fr;
         height: 100%;
-        border-right: solid #1a1a1a;
+        border-right: solid $surface-lighten-1;
     }
 
     .col:last-of-type {
@@ -162,7 +204,7 @@ class MeridianApp(App[None]):
     ReconPanel {
         height: 1fr;
         border: none;
-        border-bottom: solid #1a1a1a;
+        border-bottom: solid $surface-lighten-1;
     }
 
     ReconPanel:last-of-type {
@@ -170,23 +212,23 @@ class MeridianApp(App[None]):
     }
 
     .panel-header {
-        background: #111111;
-        color: #4a9eff;
+        background: $panel;
+        color: $primary;
         height: 1;
         padding: 0 1;
     }
 
     RichLog {
-        background: #0d0d0d;
+        background: $background;
         padding: 0 1;
-        scrollbar-color: #2a2a2a;
-        scrollbar-background: #0d0d0d;
+        scrollbar-color: $primary-darken-3;
+        scrollbar-background: $background;
         scrollbar-size: 1 1;
     }
 
     Footer {
-        background: #0a0a0a;
-        color: #444444;
+        background: $panel;
+        color: $text-muted;
     }
     """
 
@@ -194,6 +236,7 @@ class MeridianApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("r", "rerun", "Re-run all"),
         Binding("s", "save", "Save report"),
+        Binding("t", "next_theme", "Theme"),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
 
@@ -201,6 +244,7 @@ class MeridianApp(App[None]):
         super().__init__(**kwargs)
         self.target = target
         self.config = config
+        self._theme_idx = 0
 
         self._module_map: list[tuple[ReconModule, str]] = [
             (DNSModule(config),        "dns"),
@@ -212,13 +256,11 @@ class MeridianApp(App[None]):
             (GitHubModule(config),     "github"),
         ]
 
-    # ── Layout ───────────────────────────────────────────────────────────────
-
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Static(
-            f"[dim]▸[/dim] [bold green]{self.target}[/bold green]"
-            "  [dim]│[/dim]  [dim]passive only - crt.sh · WHOIS · DNS · Shodan · VT · GitHub · Wayback[/dim]",
+            f"[dim]>[/dim] [bold]{self.target}[/bold]"
+            "  [dim]|[/dim]  [dim]passive only - crt.sh · WHOIS · DNS · Shodan · VT · GitHub · Wayback[/dim]",
             id="status-bar",
         )
 
@@ -239,11 +281,14 @@ class MeridianApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.title = f"MERIDIAN  ▸  {self.target}"
+        self.register_theme(MATRIX_THEME)
+        self.register_theme(BLOOD_THEME)
+        self.theme = THEMES[0][0]
+        self.title = f"MERIDIAN  >  {self.target}"
         for module, panel_id in self._module_map:
             self._run_module(module, panel_id)
 
-    # ── Workers ──────────────────────────────────────────────────────────────
+    # ── Workers ───────────────────────────────────────────────────────────────
 
     @work(exclusive=False, thread=False)
     async def _run_module(self, module: ReconModule, panel_id: str) -> None:
@@ -260,7 +305,13 @@ class MeridianApp(App[None]):
             return
         panel.set_done()
 
-    # ── Actions ──────────────────────────────────────────────────────────────
+    # ── Actions ───────────────────────────────────────────────────────────────
+
+    def action_next_theme(self) -> None:
+        self._theme_idx = (self._theme_idx + 1) % len(THEMES)
+        name, label = THEMES[self._theme_idx]
+        self.theme = name
+        self.notify(f"Theme: {label}", timeout=2)
 
     def action_rerun(self) -> None:
         for _, panel_id in self._module_map:
@@ -268,7 +319,7 @@ class MeridianApp(App[None]):
             panel.clear()
         for module, panel_id in self._module_map:
             self._run_module(module, panel_id)
-        self.notify("Re-running all modules…")
+        self.notify("Re-running all modules...")
 
     def action_save(self) -> None:
         safe_target = self.target.replace(".", "_").replace("/", "_")
@@ -277,19 +328,19 @@ class MeridianApp(App[None]):
 
         lines = [
             "=" * 70,
-            f"MERIDIAN - Recon Report",
+            "MERIDIAN - Recon Report",
             f"Target : {self.target}",
             f"Date   : {datetime.now().isoformat()}",
             "=" * 70,
             "",
         ]
 
-        for module, panel_id in self._module_map:
+        for _, panel_id in self._module_map:
             panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
-            lines.append(f"\n{'─' * 60}")
+            lines.append(f"\n{'-' * 60}")
             lines.append(f"[{panel._title}]  ({panel.count} findings)")
-            lines.append("─" * 60)
+            lines.append("-" * 60)
             lines.extend(panel.export_lines())
 
         out.write_text("\n".join(lines))
-        self.notify(f"Saved → {out}", severity="information")
+        self.notify(f"Saved: {out}", severity="information")

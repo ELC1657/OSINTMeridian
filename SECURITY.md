@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.10.0  | ✓ |
+| 0.12.0  | ✓ |
+| 0.10.0  | ✗ |
 
 ## Intended use
 
@@ -30,7 +31,7 @@ Meridian does not collect or transmit any data about you or your targets. All qu
 - VirusTotal / Google: [virustotal.com/about/terms-of-service](https://www.virustotal.com/about/terms-of-service/)
 - GitHub: [docs.github.com/en/site-policy/privacy-policies](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)
 
-API keys you configure are stored locally in `.env` or `~/.config/meridian/keys.toml` and are never sent anywhere except to their respective services.
+API keys are stored locally in `~/.config/meridian/.env` or `~/.config/meridian/keys.toml` and are never sent anywhere except to their respective services. They are never committed to git.
 
 Reports saved with `s` are written to a local `.txt` file in your current directory. They are never uploaded anywhere.
 

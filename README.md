@@ -41,8 +41,8 @@ Four sources work with zero configuration. The other three need free API keys.
 ## Install
 
 ```bash
-git clone https://github.com/you/meridian
-cd meridian
+git clone https://github.com/ELC1657/OSINTMeridian
+cd OSINTMeridian
 ./install.sh
 ```
 
@@ -53,13 +53,10 @@ The script creates a `.venv`, installs all dependencies, and symlinks `meridian`
 ## Usage
 
 ```bash
-# Domain
 meridian example.com
+```
 
-# With keys in a .env file
-cp .env.example .env   # fill in your keys
-meridian example.com
-
+```bash
 # Pass keys inline
 meridian example.com --shodan-key=xxx --vt-key=yyy --github-token=zzz
 
@@ -72,9 +69,16 @@ meridian example.com
 
 | Key | Action |
 |---|---|
+| `t` | Cycle through themes |
 | `s` | Save a plain-text report to `meridian_<target>_<timestamp>.txt` |
 | `r` | Re-run all modules against the same target |
 | `q` | Quit |
+
+## Themes
+
+Press `t` to cycle through 10 built-in themes:
+
+Matrix, Blood, Nord, Gruvbox, Catppuccin, Dracula, Tokyo Night, Monokai, Rose Pine, Default Dark
 
 ## API keys
 
@@ -86,17 +90,26 @@ All keys are free tier unless you need higher rate limits.
 | `VT_API_KEY` | [virustotal.com/gui/my-apikey](https://www.virustotal.com/gui/my-apikey) | Detections, reputation, historical IPs, subdomains |
 | `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) (public_repo scope) | Code search dorks - 30 req/min instead of 10 |
 
+Store your keys in `~/.config/meridian/.env` so they work from any directory:
+
+```bash
+mkdir -p ~/.config/meridian
+cp .env.example ~/.config/meridian/.env
+# edit ~/.config/meridian/.env and fill in your keys
+```
+
 Keys are loaded in this order (later overrides earlier):
 
 1. `~/.config/meridian/keys.toml`
-2. Environment variables
-3. `.env` file in the current directory
-4. CLI flags (`--shodan-key`, `--vt-key`, `--github-token`)
+2. `~/.config/meridian/.env`
+3. Environment variables
+4. `.env` in current directory
+5. CLI flags (`--shodan-key`, `--vt-key`, `--github-token`)
 
 ## Updating
 
 ```bash
-cd meridian
+cd OSINTMeridian
 git pull
 make update
 ```
