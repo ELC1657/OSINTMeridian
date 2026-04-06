@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+
+# Credentials - never commit
+.env
+
+# Meridian report output
+meridian_*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Editors
+.DS_Store
+*.swp
+.idea/
+.vscode/
