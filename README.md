@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-# Meridian `v0.14.1`
-=======
 # Meridian v0.50.0
->>>>>>> 571e894 (v0.50.0 - major feature release)
 
 Offensive recon aggregator for penetration testers. Type a target, get results from 18 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching.
 
