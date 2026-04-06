@@ -6,6 +6,7 @@ from .shodan_mod import ShodanModule
 from .virustotal import VirusTotalModule
 from .github_mod import GitHubModule
 from .wayback import WaybackModule
+from .hunter import HunterModule
 
 __all__ = [
     "Finding",
@@ -17,4 +18,5 @@ __all__ = [
     "VirusTotalModule",
     "GitHubModule",
     "WaybackModule",
+    "HunterModule",
 ]

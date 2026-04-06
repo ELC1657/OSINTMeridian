@@ -4,23 +4,30 @@ Passive recon aggregator for penetration testers. Type a target, get results fro
 
 ```
 ┌─────────────────────────┬──────────────────────────┬─────────────────────────┐
-│ ✓ DNS Records      (10) │ ✓ Subdomains (crt.sh)(47)│ ✓ Shodan           (12) │
+│ ✓ DNS Records      (25) │ ✓ Subdomains (crt.sh)(11)│ ✓ Shodan           (4)  │
 │                         │                          │                         │
-│ A      104.18.26.120    │ *.target.com             │ 104.18.26.120:443/tcp   │
-│ A      104.18.27.120    │ api.target.com           │   nginx 1.25.3          │
-│ AAAA   2606:4700::...   │ admin.target.com         │   ⚠ CVE-2023-44487      │
-│ MX     0 .              │ dev.target.com           │ 104.18.27.120:80/tcp    │
-│ NS     ns1.cloudflare.. │ staging.target.com       │ DNS subdomains (23)     │
-│ TXT    v=spf1 -all      │ ...                      │   api.target.com        │
-│                         ├──────────────────────────┤ ◉ VirusTotal            │
-│ ✓ WHOIS            (8)  │ ◉ Wayback Machine        │                         │
-│                         │                          │ Detections: 0/93        │
-│ Registrar: Cloudflare   │ Archived URLs: 1,204     │ Reputation: +5          │
-│ Created:   2012-04-11   │ Unique hosts: 8          │ Categories: technology  │
-│ Expires:   2026-04-11   │ Interesting URLs (14):   │ ◉ GitHub                │
-│ Org:       Target Inc.  │   200 /api/v1/users      │                         │
-│ Country:   US           │   200 /admin/login       │ .env files  (3 results) │
-│ DNSSEC:    unsigned     │   404 /.git/config       │   target/config ↗       │
+│ A      104.26.0.16      │ Total unique: 9          │ Search requires paid    │
+│ A      104.26.1.16      │ api.target.com           │ plan. DNS lookup:       │
+│ AAAA   2606:4700::...   │ dev.target.com           │   cdn.target.com        │
+│ MX     10 mx1.target... │ mail.target.com          │   mail.target.com       │
+│ NS     lily.ns.cloud... │ panel.target.com         ├─────────────────────────┤
+│ TXT    v=spf1 +mx...    │ ...                      │ ✓ VirusTotal      (22)  │
+│ CAA    0 issue ssl.com  ├──────────────────────────┤                         │
+│                         │ ◉ Wayback Machine        │ Detections: 0/94        │
+│ ✓ WHOIS            (6)  │                          │ Reputation: +0          │
+│                         │ Archived URLs: 1,204     │ Subdomains (9):         │
+│ Registrar: Cloudflare   │ Interesting URLs (14):   │   cdn.target.com        │
+│ Created:   2012-04-11   │   200 /api/v1/users      │   dev.target.com        │
+│ Expires:   2026-04-11   │   200 /admin/login       ├─────────────────────────┤
+│ Org:       Target Inc.  │   404 /.git/config       │ ✓ GitHub          (20)  │
+│ Country:   US           ├──────────────────────────┤                         │
+│                         │ ✓ Hunter.io        (8)   │ password  (10 results)  │
+│                         │                          │   joshhk72/prodigy      │
+│                         │ Org: Target Inc.         │ secret   (119 results)  │
+│                         │ Pattern: {f}{last}@...   │   tech234a/annotation   │
+│                         │ Emails found: 42         │ .env files  (3 results) │
+│                         │  94%  j.smith@target.com │   target/config         │
+│                         │  87%  a.jones@target.com ├─────────────────────────┤
 └─────────────────────────┴──────────────────────────┴─────────────────────────┘
 ```
 
@@ -35,8 +42,9 @@ Passive recon aggregator for penetration testers. Type a target, get results fro
 | Shodan | Host search + DNS subdomains endpoint, CVEs surfaced inline | `SHODAN_API_KEY` |
 | VirusTotal | Domain report, detection stats, historical IPs, subdomains | `VT_API_KEY` |
 | GitHub | 10 dork queries - passwords, secrets, `.env`, private keys, configs | `GITHUB_TOKEN` |
+| Hunter.io | Email discovery, org info, email pattern inference, confidence scores | `HUNTER_API_KEY` |
 
-Four sources work with zero configuration. The other three need free API keys.
+Four sources work with zero configuration. The other four need free API keys.
 
 ## Install
 
@@ -89,6 +97,7 @@ All keys are free tier unless you need higher rate limits.
 | `SHODAN_API_KEY` | [account.shodan.io](https://account.shodan.io/) | Host enumeration, open ports, CVEs, DNS subdomains |
 | `VT_API_KEY` | [virustotal.com/gui/my-apikey](https://www.virustotal.com/gui/my-apikey) | Detections, reputation, historical IPs, subdomains |
 | `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) (public_repo scope) | Code search dorks - 30 req/min instead of 10 |
+| `HUNTER_API_KEY` | [hunter.io/users/sign_up](https://hunter.io/users/sign_up) | Email discovery, org info, email pattern inference |
 
 Store your keys in `~/.config/meridian/.env` so they work from any directory:
 

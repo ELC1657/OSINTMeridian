@@ -40,4 +40,5 @@ class ReconModule(ABC):
 
     @abstractmethod
     async def run(self, target: str) -> AsyncIterator[Finding]:
-        ...
+        return
+        yield  # makes this an async generator so subclass signatures match

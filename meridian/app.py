@@ -18,6 +18,7 @@ from .modules import (
     DNSModule,
     Finding,
     GitHubModule,
+    HunterModule,
     ReconModule,
     ShodanModule,
     VirusTotalModule,
@@ -254,6 +255,7 @@ class MeridianApp(App[None]):
             (ShodanModule(config),     "shodan"),
             (VirusTotalModule(config), "virustotal"),
             (GitHubModule(config),     "github"),
+            (HunterModule(config),     "hunter"),
         ]
 
     def compose(self) -> ComposeResult:
@@ -277,6 +279,7 @@ class MeridianApp(App[None]):
                 yield ReconPanel("Shodan",      "shodan")
                 yield ReconPanel("VirusTotal",  "virustotal")
                 yield ReconPanel("GitHub",      "github")
+                yield ReconPanel("Hunter.io",   "hunter")
 
         yield Footer()
 

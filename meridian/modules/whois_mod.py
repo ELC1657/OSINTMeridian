@@ -56,12 +56,14 @@ class WHOISModule(ReconModule):
             ("status", "Status", False),
         ]
 
+        found = 0
         for attr, label, is_date in fields:
             val = getattr(data, attr, None)
             if val is None:
                 continue
             if is_date:
                 yield Finding("whois", f"[cyan]{label}:[/cyan] [white]{_fmt_date(val)}[/white]")
+                found += 1
             elif isinstance(val, list):
                 items = _fmt_list(val)
                 if len(items) == 1:
@@ -70,10 +72,17 @@ class WHOISModule(ReconModule):
                     yield Finding("whois", f"[cyan]{label}:[/cyan]")
                     for item in items:
                         yield Finding("whois", f"  [white]{item}[/white]")
+                found += 1
             else:
                 yield Finding("whois", f"[cyan]{label}:[/cyan] [white]{val}[/white]")
+                found += 1
 
         # Privacy / registrar abuse contact
         abuse = getattr(data, "registrar_abuse_contact_email", None)
         if abuse:
             yield Finding("whois", f"[cyan]Abuse Email:[/cyan] [yellow]{abuse}[/yellow]")
+            found += 1
+
+        if found == 0:
+            yield Finding("whois", "[dim]WHOIS returned data but all fields are redacted or unparseable[/dim]")
+            yield Finding("whois", f"[dim]Try: whois {domain}[/dim]")

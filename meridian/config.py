@@ -15,6 +15,7 @@ _ENV_MAP = {
     "SHODAN_API_KEY": "shodan_api_key",
     "VT_API_KEY": "vt_api_key",
     "GITHUB_TOKEN": "github_token",
+    "HUNTER_API_KEY": "hunter_api_key",
 }
 
 

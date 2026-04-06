@@ -34,9 +34,15 @@ class ShodanModule(ReconModule):
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 401:
                     yield Finding("shodan", "[red]Invalid API key[/red]")
+                    return
+                elif e.response.status_code == 403:
+                    yield Finding("shodan", "[yellow]Search requires a paid Shodan plan[/yellow]")
+                    yield Finding("shodan", "[dim]Free tier only supports direct IP lookups[/dim]")
+                    yield Finding("shodan", "[dim]Trying DNS lookup instead...[/dim]")
+                    data = {}
                 else:
                     yield Finding("shodan", f"[red]HTTP {e.response.status_code}[/red]")
-                return
+                    return
             except Exception as e:
                 yield Finding("shodan", f"[red]Error: {e}[/red]")
                 return
