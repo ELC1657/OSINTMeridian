@@ -8,6 +8,15 @@ from .github_mod import GitHubModule
 from .wayback import WaybackModule
 from .hunter import HunterModule
 from .urlscan import URLScanModule
+from .takeover import TakeoverModule
+from .spoof import SpoofModule
+from .asn_mod import ASNModule
+from .breach import BreachModule
+from .jsscan import JSScanModule
+from .params import ParamsModule
+from .brief import AttackBriefModule
+from .employees import EmployeesModule
+from .playbook import PlaybookModule
 
 __all__ = [
     "Finding",
@@ -21,4 +30,13 @@ __all__ = [
     "WaybackModule",
     "HunterModule",
     "URLScanModule",
+    "TakeoverModule",
+    "SpoofModule",
+    "ASNModule",
+    "BreachModule",
+    "JSScanModule",
+    "ParamsModule",
+    "AttackBriefModule",
+    "EmployeesModule",
+    "PlaybookModule",
 ]

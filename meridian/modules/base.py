@@ -16,6 +16,7 @@ def _normalize(target: str) -> str:
 class Finding:
     module: str
     line: str  # Rich markup string
+    progress: bool = False  # if True: display only, not counted or exported
 
     def format_rich(self) -> str:
         return self.line

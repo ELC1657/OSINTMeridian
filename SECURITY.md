@@ -4,17 +4,19 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.14.1  | ✓ |
-| 0.14.0  | ✗ |
-| 0.13.1  | ✗ |
-| 0.12.0  | ✗ |
-| 0.10.0  | ✗ |
+| 0.50.0  | yes |
+| 0.14.1  | no |
+| 0.13.1  | no |
+| 0.12.0  | no |
+| 0.10.0  | no |
 
 ## Intended use
 
 Meridian is a passive reconnaissance tool designed for use during **authorized penetration testing engagements, bug bounty programs, CTF competitions, and security research on systems you own or have explicit written permission to assess**.
 
-Passive reconnaissance means Meridian only queries public third-party databases (Shodan, crt.sh, VirusTotal, Wayback Machine, WHOIS, GitHub, DNS resolvers). It does not send packets directly to the target, exploit vulnerabilities, or perform active scanning.
+Passive reconnaissance means Meridian only queries public third-party databases and APIs. It does not send packets directly to the target, exploit vulnerabilities, or perform active scanning.
+
+The Playbook and Attack Brief panels generate attack chain suggestions based on discovered data. These suggestions are informational only — executing them against any system without explicit written authorization is illegal.
 
 ## Authorized use only
 
@@ -33,10 +35,13 @@ Meridian does not collect or transmit any data about you or your targets. All qu
 - Shodan: [shodan.io/privacy](https://www.shodan.io/privacy)
 - VirusTotal / Google: [virustotal.com/about/terms-of-service](https://www.virustotal.com/about/terms-of-service/)
 - GitHub: [docs.github.com/en/site-policy/privacy-policies](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)
+- Hunter.io: [hunter.io/privacy-policy](https://hunter.io/privacy-policy)
+- HaveIBeenPwned: [haveibeenpwned.com/Privacy](https://haveibeenpwned.com/Privacy)
+- BGPView: [bgpview.io](https://bgpview.io)
 
 API keys are stored locally in `~/.config/meridian/.env` or `~/.config/meridian/keys.toml` and are never sent anywhere except to their respective services. They are never committed to git.
 
-Reports saved with `s` are written to a local `.txt` file in your current directory. They are never uploaded anywhere.
+Reports saved with `s` or `j` are written to local files in your current directory. They are never uploaded anywhere.
 
 ## Reporting a vulnerability in Meridian
 

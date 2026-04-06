@@ -15,16 +15,25 @@ from textual.containers import Horizontal, Vertical
 from textual.events import Click
 from textual.reactive import reactive
 from textual.theme import Theme
-from textual.widgets import Footer, Header, RichLog, Static
+from textual.widgets import Footer, Header, RichLog, Static, TabbedContent, TabPane
 
 from .modules import (
+    ASNModule,
+    AttackBriefModule,
+    BreachModule,
     CrtShModule,
     DNSModule,
+    EmployeesModule,
     Finding,
     GitHubModule,
     HunterModule,
+    JSScanModule,
+    ParamsModule,
+    PlaybookModule,
     ReconModule,
     ShodanModule,
+    SpoofModule,
+    TakeoverModule,
     URLScanModule,
     VirusTotalModule,
     WaybackModule,
@@ -82,18 +91,10 @@ BLOOD_THEME = Theme(
     dark=True,
 )
 
-THEMES: list[tuple[str, str]] = [
-    ("matrix",           "Matrix"),
-    ("blood",            "Blood"),
-    ("nord",             "Nord"),
-    ("gruvbox",          "Gruvbox"),
-    ("catppuccin-mocha", "Catppuccin"),
-    ("dracula",          "Dracula"),
-    ("tokyo-night",      "Tokyo Night"),
-    ("monokai",          "Monokai"),
-    ("rose-pine",        "Rose Pine"),
-    ("textual-dark",     "Default Dark"),
-]
+# Themes to show first in the cycle (custom ones we registered)
+_PINNED_THEMES = ["matrix", "blood"]
+# Substrings in a theme name that mean we skip it (light / near-duplicate)
+_SKIP_THEMES = {"light", "ansi"}
 
 
 # ── Panel widget ──────────────────────────────────────────────────────────────
@@ -227,8 +228,48 @@ class MeridianApp(App[None]):
         content-align: left middle;
     }
 
-    #main {
+    TabbedContent {
         height: 1fr;
+    }
+
+    TabbedContent ContentSwitcher {
+        height: 1fr;
+    }
+
+    TabPane {
+        padding: 0;
+        height: 100%;
+    }
+
+    Tabs {
+        background: $panel;
+    }
+
+    Tab {
+        background: $panel;
+        color: $text;
+        padding: 0 2;
+    }
+
+    Tab:hover {
+        background: $surface;
+        color: $text;
+    }
+
+    Tab.-active {
+        background: $surface;
+        color: $primary;
+        text-style: bold;
+    }
+
+    Tab:focus {
+        background: $surface;
+        color: $primary;
+        text-style: bold;
+    }
+
+    .tab-layout {
+        height: 100%;
     }
 
     .col {
@@ -278,60 +319,167 @@ class MeridianApp(App[None]):
         Binding("s", "save", "Save txt"),
         Binding("j", "save_json", "Save JSON"),
         Binding("t", "next_theme", "Theme"),
+        Binding("1", "switch_tab('tab-network')",   "Network",   show=False),
+        Binding("2", "switch_tab('tab-web')",        "Web",       show=False),
+        Binding("3", "switch_tab('tab-offensive')",  "Offensive", show=False),
+        Binding("4", "switch_tab('tab-brief')",      "Brief",     show=False),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
 
-    def __init__(self, target: str, config: dict[str, str], **kwargs) -> None:
+    def __init__(
+        self,
+        target: str,
+        config: dict[str, str],
+        watch_interval: int | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.target = target
         self.config = config
-        self._theme_idx = 0
+        self._theme_idx   = 0
+        self._watch_interval = watch_interval
+        self._watch_mode     = watch_interval is not None
+        self._watch_prev: dict[str, set[str]] = {}
+        self._watch_count = 0
 
         self._module_map: list[tuple[ReconModule, str]] = [
             (DNSModule(config),        "dns"),
             (WHOISModule(config),      "whois"),
+            (SpoofModule(config),      "spoof"),
             (CrtShModule(config),      "crtsh"),
             (WaybackModule(config),    "wayback"),
             (URLScanModule(config),    "urlscan"),
             (ShodanModule(config),     "shodan"),
+            (ASNModule(config),        "asn"),
             (VirusTotalModule(config), "virustotal"),
             (GitHubModule(config),     "github"),
             (HunterModule(config),     "hunter"),
+            (EmployeesModule(config),  "employees"),
+            (TakeoverModule(config),   "takeover"),
+            (BreachModule(config),     "breach"),
+            (JSScanModule(config),     "jsscan"),
+            (ParamsModule(config),     "params"),
         ]
+        # Brief + Playbook added last — they read from all other panels
+        self._module_map.append(
+            (AttackBriefModule(config, self._collect_panel_data), "brief")
+        )
+        self._module_map.append(
+            (PlaybookModule(config, self._collect_panel_data), "playbook")
+        )
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Static(
             f"[dim]>[/dim] [bold]{self.target}[/bold]"
-            "  [dim]|[/dim]  [dim]passive only - crt.sh · WHOIS · DNS · Shodan · VT · GitHub · Wayback · Hunter[/dim]",
+            + ("  [yellow]◉ WATCH[/yellow]" if self._watch_mode else "")
+            + "  [dim]|[/dim]  [dim]1 Network  2 Web  3 Offensive  4 Brief[/dim]",
             id="status-bar",
         )
 
-        with Horizontal(id="main"):
-            with Vertical(classes="col"):
-                yield ReconPanel("DNS Records",  "dns")
-                yield ReconPanel("WHOIS",        "whois")
+        with TabbedContent(initial="tab-network"):
+            with TabPane("Network", id="tab-network"):
+                with Horizontal(classes="tab-layout"):
+                    with Vertical(classes="col"):
+                        yield ReconPanel("DNS Records", "dns")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("WHOIS",         "whois")
+                        yield ReconPanel("Spoofability",  "spoof")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Shodan",        "shodan")
+                        yield ReconPanel("ASN / Ranges",  "asn")
 
-            with Vertical(classes="col"):
-                yield ReconPanel("Subdomains (crt.sh)", "crtsh")
-                yield ReconPanel("Wayback Machine",     "wayback")
-                yield ReconPanel("URLScan.io",          "urlscan")
+            with TabPane("Web", id="tab-web"):
+                with Horizontal(classes="tab-layout"):
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Subdomains (crt.sh)", "crtsh")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Wayback Machine", "wayback")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("URLScan.io", "urlscan")
 
-            with Vertical(classes="col"):
-                yield ReconPanel("Shodan",      "shodan")
-                yield ReconPanel("VirusTotal",  "virustotal")
-                yield ReconPanel("GitHub",      "github")
-                yield ReconPanel("Hunter.io",   "hunter")
+            with TabPane("Offensive", id="tab-offensive"):
+                with Horizontal(classes="tab-layout"):
+                    with Vertical(classes="col"):
+                        yield ReconPanel("VirusTotal",       "virustotal")
+                        yield ReconPanel("GitHub",           "github")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Hunter.io",        "hunter")
+                        yield ReconPanel("Takeover",         "takeover")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Breach Intel",     "breach")
+                        yield ReconPanel("Employee Targets", "employees")
+
+            with TabPane("Brief", id="tab-brief"):
+                with Horizontal(classes="tab-layout"):
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Attack Brief", "brief")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Playbook",     "playbook")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("JS Secrets",   "jsscan")
+                        yield ReconPanel("URL Params",   "params")
 
         yield Footer()
 
     def on_mount(self) -> None:
         self.register_theme(MATRIX_THEME)
         self.register_theme(BLOOD_THEME)
-        self.theme = THEMES[0][0]
+
+        # Build cycle list: pinned customs first, then every dark Textual theme
+        available = set(self.available_themes.keys())
+        rest = sorted(
+            t for t in available
+            if t not in _PINNED_THEMES
+            and not any(skip in t.lower() for skip in _SKIP_THEMES)
+        )
+        self._themes: list[str] = [t for t in _PINNED_THEMES if t in available] + rest
+        self._theme_idx = 0
+
+        self.theme = self._themes[0]
         self.title = f"MERIDIAN  >  {self.target}"
         for module, panel_id in self._module_map:
             self._run_module(module, panel_id)
+        if self._watch_mode:
+            self._watch_loop()
+
+    @work(exclusive=False, thread=False)
+    async def _watch_loop(self) -> None:
+        """Background worker: re-scans on interval, highlights new findings."""
+        assert self._watch_interval is not None
+        while True:
+            await asyncio.sleep(self._watch_interval * 60)
+            self._watch_count += 1
+            # Snapshot current findings before clearing
+            self._watch_prev = {}
+            for _, panel_id in self._module_map:
+                try:
+                    panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
+                    self._watch_prev[panel_id] = set(panel.export_lines())
+                except Exception:
+                    pass
+            self.notify(
+                f"Watch scan #{self._watch_count} — new findings will be highlighted",
+                timeout=4,
+            )
+            self.action_rerun()
+
+    def _collect_panel_data(self) -> dict[str, dict]:
+        """Read all panel findings — called by AttackBriefModule to synthesize."""
+        result: dict[str, dict] = {}
+        for _, panel_id in self._module_map:
+            if panel_id == "brief":
+                continue
+            try:
+                panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
+                result[panel_id] = {
+                    "status":   panel.status,
+                    "count":    panel.count,
+                    "findings": panel.export_lines(),
+                }
+            except Exception:
+                pass
+        return result
 
     # ── Workers ───────────────────────────────────────────────────────────────
 
@@ -339,9 +487,17 @@ class MeridianApp(App[None]):
     async def _run_module(self, module: ReconModule, panel_id: str) -> None:
         panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
         panel.set_running()
+        prev = self._watch_prev.get(panel_id, set())
         try:
             async for finding in module.run(self.target):
-                panel.write_finding(finding)
+                if finding.progress:
+                    panel.write_line(finding.line)
+                else:
+                    if prev and finding.format_plain().strip() and finding.format_plain() not in prev:
+                        marked = Finding(finding.module, f"[yellow]◆[/yellow] {finding.line}")
+                        panel.write_finding(marked)
+                    else:
+                        panel.write_finding(finding)
         except asyncio.CancelledError:
             panel.set_error("Cancelled")
             raise
@@ -353,10 +509,14 @@ class MeridianApp(App[None]):
     # ── Actions ───────────────────────────────────────────────────────────────
 
     def action_next_theme(self) -> None:
-        self._theme_idx = (self._theme_idx + 1) % len(THEMES)
-        name, label = THEMES[self._theme_idx]
+        self._theme_idx = (self._theme_idx + 1) % len(self._themes)
+        name = self._themes[self._theme_idx]
         self.theme = name
-        self.notify(f"Theme: {label}", timeout=2)
+        label = name.replace("-", " ").title()
+        self.notify(f"Theme: {label}  ({self._theme_idx + 1}/{len(self._themes)})", timeout=2)
+
+    def action_switch_tab(self, tab_id: str) -> None:
+        self.query_one(TabbedContent).active = tab_id
 
     def action_rerun(self) -> None:
         for _, panel_id in self._module_map:
@@ -375,8 +535,7 @@ class MeridianApp(App[None]):
             "=" * 70,
             "MERIDIAN - Recon Report",
             f"Target : {self.target}",
-            f"Date   : {datetime.now().isoformat()}",
-            "=" * 70,
+            f"Date   : {datetime.now().isoformat()}",            "=" * 70,
             "",
         ]
 
@@ -398,7 +557,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.14.1",
+            "version": "0.50.0",
             "modules": {},
         }
 
