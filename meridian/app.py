@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import platform
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
@@ -9,6 +12,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.events import Click
 from textual.reactive import reactive
 from textual.theme import Theme
 from textual.widgets import Footer, Header, RichLog, Static
@@ -21,10 +25,31 @@ from .modules import (
     HunterModule,
     ReconModule,
     ShodanModule,
+    URLScanModule,
     VirusTotalModule,
     WaybackModule,
     WHOISModule,
 )
+
+
+# ── Clipboard helper ──────────────────────────────────────────────────────────
+
+def _copy_to_clipboard(text: str) -> bool:
+    """Copy text to the system clipboard. Returns True on success."""
+    try:
+        system = platform.system()
+        if system == "Darwin":
+            subprocess.run(["pbcopy"], input=text.encode(), check=True, capture_output=True)
+        elif system == "Linux":
+            try:
+                subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode(), check=True, capture_output=True)
+            except FileNotFoundError:
+                subprocess.run(["xsel", "--clipboard", "--input"], input=text.encode(), check=True, capture_output=True)
+        elif system == "Windows":
+            subprocess.run(["clip"], input=text.encode(), check=True, capture_output=True)
+        return True
+    except Exception:
+        return False
 
 
 # ── Custom themes ─────────────────────────────────────────────────────────────
@@ -159,6 +184,20 @@ class ReconPanel(Vertical):
     def export_lines(self) -> list[str]:
         return list(self._findings)
 
+    def on_click(self, event: Click) -> None:
+        # y=0 is the header bar, y=1+ is the log area
+        log = self.query_one(RichLog)
+        line_idx = int(log.scroll_y) + max(0, event.y - 1)
+        if 0 <= line_idx < len(self._findings):
+            text = self._findings[line_idx].strip()
+            if text:
+                ok = _copy_to_clipboard(text)
+                preview = text[:60] + ("..." if len(text) > 60 else "")
+                if ok:
+                    self.app.notify(f"Copied: {preview}", timeout=2)
+                else:
+                    self.app.notify("Clipboard unavailable", severity="warning", timeout=2)
+
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 
@@ -236,7 +275,8 @@ class MeridianApp(App[None]):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "rerun", "Re-run all"),
-        Binding("s", "save", "Save report"),
+        Binding("s", "save", "Save txt"),
+        Binding("j", "save_json", "Save JSON"),
         Binding("t", "next_theme", "Theme"),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
@@ -252,6 +292,7 @@ class MeridianApp(App[None]):
             (WHOISModule(config),      "whois"),
             (CrtShModule(config),      "crtsh"),
             (WaybackModule(config),    "wayback"),
+            (URLScanModule(config),    "urlscan"),
             (ShodanModule(config),     "shodan"),
             (VirusTotalModule(config), "virustotal"),
             (GitHubModule(config),     "github"),
@@ -262,7 +303,7 @@ class MeridianApp(App[None]):
         yield Header(show_clock=True)
         yield Static(
             f"[dim]>[/dim] [bold]{self.target}[/bold]"
-            "  [dim]|[/dim]  [dim]passive only - crt.sh · WHOIS · DNS · Shodan · VT · GitHub · Wayback[/dim]",
+            "  [dim]|[/dim]  [dim]passive only - crt.sh · WHOIS · DNS · Shodan · VT · GitHub · Wayback · Hunter[/dim]",
             id="status-bar",
         )
 
@@ -274,6 +315,7 @@ class MeridianApp(App[None]):
             with Vertical(classes="col"):
                 yield ReconPanel("Subdomains (crt.sh)", "crtsh")
                 yield ReconPanel("Wayback Machine",     "wayback")
+                yield ReconPanel("URLScan.io",          "urlscan")
 
             with Vertical(classes="col"):
                 yield ReconPanel("Shodan",      "shodan")
@@ -346,4 +388,27 @@ class MeridianApp(App[None]):
             lines.extend(panel.export_lines())
 
         out.write_text("\n".join(lines))
+        self.notify(f"Saved: {out}", severity="information")
+
+    def action_save_json(self) -> None:
+        safe_target = self.target.replace(".", "_").replace("/", "_")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out = Path(f"meridian_{safe_target}_{ts}.json")
+
+        payload: dict = {
+            "target": self.target,
+            "date": datetime.now().isoformat(),
+            "version": "0.14.0",
+            "modules": {},
+        }
+
+        for _, panel_id in self._module_map:
+            panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
+            payload["modules"][panel_id] = {
+                "name": panel._title,
+                "count": panel.count,
+                "findings": panel.export_lines(),
+            }
+
+        out.write_text(json.dumps(payload, indent=2))
         self.notify(f"Saved: {out}", severity="information")

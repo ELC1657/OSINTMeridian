@@ -2,6 +2,8 @@ import asyncio
 from datetime import datetime
 from typing import AsyncIterator, Any
 
+from rich.markup import escape
+
 from .base import Finding, ReconModule, _normalize
 
 
@@ -67,20 +69,20 @@ class WHOISModule(ReconModule):
             elif isinstance(val, list):
                 items = _fmt_list(val)
                 if len(items) == 1:
-                    yield Finding("whois", f"[cyan]{label}:[/cyan] [white]{items[0]}[/white]")
+                    yield Finding("whois", f"[cyan]{label}:[/cyan] [white]{escape(items[0])}[/white]")
                 else:
                     yield Finding("whois", f"[cyan]{label}:[/cyan]")
                     for item in items:
-                        yield Finding("whois", f"  [white]{item}[/white]")
+                        yield Finding("whois", f"  [white]{escape(item)}[/white]")
                 found += 1
             else:
-                yield Finding("whois", f"[cyan]{label}:[/cyan] [white]{val}[/white]")
+                yield Finding("whois", f"[cyan]{label}:[/cyan] [white]{escape(str(val))}[/white]")
                 found += 1
 
         # Privacy / registrar abuse contact
         abuse = getattr(data, "registrar_abuse_contact_email", None)
         if abuse:
-            yield Finding("whois", f"[cyan]Abuse Email:[/cyan] [yellow]{abuse}[/yellow]")
+            yield Finding("whois", f"[cyan]Abuse Email:[/cyan] [yellow]{escape(str(abuse))}[/yellow]")
             found += 1
 
         if found == 0:

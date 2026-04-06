@@ -7,6 +7,7 @@ from .virustotal import VirusTotalModule
 from .github_mod import GitHubModule
 from .wayback import WaybackModule
 from .hunter import HunterModule
+from .urlscan import URLScanModule
 
 __all__ = [
     "Finding",
@@ -19,4 +20,5 @@ __all__ = [
     "GitHubModule",
     "WaybackModule",
     "HunterModule",
+    "URLScanModule",
 ]

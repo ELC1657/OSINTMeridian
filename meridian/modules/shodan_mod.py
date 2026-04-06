@@ -48,7 +48,8 @@ class ShodanModule(ReconModule):
                 return
 
             total = data.get("total", 0)
-            yield Finding("shodan", f"[bold]Total hosts:[/bold] [green]{total}[/green]")
+            if total or data:
+                yield Finding("shodan", f"[bold]Total hosts:[/bold] [green]{total}[/green]")
 
             seen_ips: set[str] = set()
             all_vulns: set[str] = set()
