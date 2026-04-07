@@ -1,6 +1,6 @@
-# Meridian v0.55.0
+# Meridian v0.58.0
 
-Offensive recon aggregator for penetration testers. Type a target, get results from 19 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching.
+Offensive recon aggregator for penetration testers. Type a target, get results from 22 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching.
 
 ```
 Network  Web  Offensive  Brief
@@ -29,8 +29,8 @@ Network  Web  Offensive  Brief
 
 | Tab | Key | Panels |
 |---|---|---|
-| Network | `1` | DNS Records, WHOIS, Spoofability, Shodan, ASN / IP Ranges |
-| Web | `2` | Subdomains (crt.sh), Wayback Machine, URLScan.io |
+| Network | `1` | DNS Records, WHOIS, Spoofability, Shodan, ASN / IP Ranges, DNS History, CVE Correlation |
+| Web | `2` | Subdomains (crt.sh), Wayback Machine, URLScan.io, Cloud Buckets |
 | Offensive | `3` | VirusTotal, GitHub, Hunter.io, Employee Targets, Takeover, Breach Intel, Dark Web |
 | Brief | `4` | Attack Brief, Playbook, JS Secrets, URL Params |
 
@@ -55,10 +55,13 @@ Network  Web  Offensive  Brief
 | Dark Web | IntelligenceX, BreachDirectory, Dehashed — leaked credentials, dark web mentions | `INTELX_API_KEY` / `RAPIDAPI_KEY` / `DEHASHED_API_KEY` |
 | JS Secrets | Fetches archived JS files, scans for AWS keys, tokens, JWTs, passwords | - |
 | URL Params | Mines 8,000 archived URLs for SSRF candidates, injection params, sensitive paths | - |
+| DNS History | SecurityTrails — all historical A, MX, NS records with date ranges | `SECTRAILS_API_KEY` |
+| Cloud Buckets | Probes 78 permutations across AWS S3, GCP Storage, Azure Blob for open/existing buckets | - |
+| CVE Correlation | Cross-references detected tech stack against NVD for HIGH/CRITICAL CVEs | `NVD_API_KEY` (optional) |
 | Attack Brief | Waits for all modules, synthesizes findings into CRITICAL / HIGH / MEDIUM / INFO | - |
 | Playbook | Generates a numbered, tool-ready attack plan based on what was actually found | - |
 
-Seven sources work with zero configuration. Four need free API keys. Three optional dark web sources require separate keys.
+Seven sources work with zero configuration. Multiple optional API keys unlock additional sources.
 
 ## Install
 
@@ -156,9 +159,26 @@ The **Dark Web** panel (Offensive tab) queries up to three breach intelligence s
 |---|---|---|
 | IntelligenceX | Dark web forum posts, Tor site mentions, ransomware group leaks, paste sites | `INTELX_API_KEY` |
 | BreachDirectory | Email:password and email:hash pairs from public dumps | `RAPIDAPI_KEY` |
-| Dehashed | 15B+ records — plaintext passwords, hashed passwords, usernames, database names | `DEHASHED_EMAIL` + `DEHASHED_API_KEY` |
+| Dehashed | 15B+ records — plaintext passwords, hashed passwords, usernames, database names | `DEHASHED_API_KEY` |
 
-All three are optional — any combination works. If no keys are set, the panel lists exactly what to get and where. The panel runs automatically when keys are present.
+All three are optional — any combination works.
+
+## DNS History
+
+The **DNS History** panel (Network tab) queries SecurityTrails for every historical A, MX, and NS record with first-seen and last-seen dates. Finds decommissioned infrastructure, old mail servers, and previous hosting providers that may still be reachable.
+
+Requires a free SecurityTrails API key (50 queries/month on free tier).
+
+## Cloud Buckets
+
+The **Cloud Buckets** panel (Web tab) probes 78 name permutations across AWS S3, GCP Cloud Storage, and Azure Blob Storage — no API key needed. Results are classified as:
+
+- `PUBLIC` (HTTP 200) — open read access, immediate finding
+- `EXISTS (private)` (HTTP 403/400) — bucket exists, worth noting for misconfiguration monitoring
+
+## CVE Correlation
+
+The **CVE Correlation** panel (Network tab) waits for URLScan.io and Shodan to finish, extracts the detected technology stack, then queries the NVD for HIGH and CRITICAL CVEs against each technology. No API key required — adding `NVD_API_KEY` raises the rate limit from 1 query per 6.5s to 1 per 0.3s.
 
 ## JSON export
 
@@ -168,11 +188,14 @@ Press `j` to save a machine-readable report. Pipe into other tools with `jq`:
 # All subdomains
 jq '.modules.crtsh.findings[]' meridian_example_com_*.json
 
-# All DNS records
-jq '.modules.dns.findings[]' meridian_example_com_*.json
+# DNS history
+jq '.modules.dnshistory.findings[]' meridian_example_com_*.json
 
-# Employee target list
-jq '.modules.employees.findings[]' meridian_example_com_*.json
+# Cloud bucket results
+jq '.modules.buckets.findings[]' meridian_example_com_*.json
+
+# CVE matches
+jq '.modules.cve.findings[]' meridian_example_com_*.json
 
 # Dark web findings
 jq '.modules.darkweb.findings[]' meridian_example_com_*.json
@@ -195,6 +218,8 @@ jq -r '.modules.crtsh.findings[]' meridian_example_com_*.json | ffuf ...
 | `INTELX_API_KEY` | [intelx.io](https://intelx.io) | Free (10 searches/mo) | Dark web mentions, paste sites, ransomware leaks |
 | `RAPIDAPI_KEY` | [rapidapi.com](https://rapidapi.com) → BreachDirectory | Free (50 req/mo) | Email:password pairs from public dumps |
 | `DEHASHED_API_KEY` | [dehashed.com](https://dehashed.com) | Paid (~$5/mo) | 15B+ records with plaintext passwords |
+| `SECTRAILS_API_KEY` | [securitytrails.com](https://securitytrails.com) | Free (50 queries/mo) | DNS history — past IPs, nameservers, mail servers |
+| `NVD_API_KEY` | [nvd.nist.gov/developers/request-an-api-key](https://nvd.nist.gov/developers/request-an-api-key) | Free | CVE queries at 50 req/30s instead of 5 req/30s |
 
 Store keys in `~/.config/meridian/.env` so they work from any directory:
 

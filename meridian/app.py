@@ -21,8 +21,11 @@ from .modules import (
     ASNModule,
     AttackBriefModule,
     BreachModule,
+    BucketsModule,
     CrtShModule,
+    CVEModule,
     DarkWebModule,
+    DNSHistoryModule,
     DNSModule,
     EmployeesModule,
     Finding,
@@ -361,8 +364,13 @@ class MeridianApp(App[None]):
             (DarkWebModule(config),    "darkweb"),
             (JSScanModule(config),     "jsscan"),
             (ParamsModule(config),     "params"),
+            (DNSHistoryModule(config), "dnshistory"),
+            (BucketsModule(config),    "buckets"),
         ]
-        # Brief + Playbook added last — they read from all other panels
+        # Modules that read from other panels — appended last
+        self._module_map.append(
+            (CVEModule(config, self._collect_panel_data), "cve")
+        )
         self._module_map.append(
             (AttackBriefModule(config, self._collect_panel_data), "brief")
         )
@@ -390,6 +398,9 @@ class MeridianApp(App[None]):
                     with Vertical(classes="col"):
                         yield ReconPanel("Shodan",        "shodan")
                         yield ReconPanel("ASN / Ranges",  "asn")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("DNS History",     "dnshistory")
+                        yield ReconPanel("CVE Correlation", "cve")
 
             with TabPane("Web", id="tab-web"):
                 with Horizontal(classes="tab-layout"):
@@ -399,6 +410,8 @@ class MeridianApp(App[None]):
                         yield ReconPanel("Wayback Machine", "wayback")
                     with Vertical(classes="col"):
                         yield ReconPanel("URLScan.io", "urlscan")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Cloud Buckets", "buckets")
 
             with TabPane("Offensive", id="tab-offensive"):
                 with Horizontal(classes="tab-layout"):
@@ -561,7 +574,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.55.0",
+            "version": "0.58.0",
             "modules": {},
         }
 

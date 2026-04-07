@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.55.0  | yes |
+| 0.58.0  | yes |
+| 0.55.0  | no |
 | 0.50.0  | no |
 | 0.14.1  | no |
 | 0.13.1  | no |
@@ -44,6 +45,8 @@ Meridian does not collect or transmit any data about you or your targets. All qu
 - IntelligenceX: [intelx.io/privacy](https://intelx.io/privacy)
 - BreachDirectory / RapidAPI: [rapidapi.com/privacy](https://rapidapi.com/privacy)
 - Dehashed: [dehashed.com/privacy](https://dehashed.com/privacy)
+- SecurityTrails: [securitytrails.com/privacy-policy](https://securitytrails.com/privacy-policy)
+- NVD / NIST: [nvd.nist.gov](https://nvd.nist.gov)
 
 API keys are stored locally in `~/.config/meridian/.env` or `~/.config/meridian/keys.toml` and are never sent anywhere except to their respective services. They are never committed to git.
 

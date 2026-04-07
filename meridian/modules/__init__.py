@@ -18,6 +18,9 @@ from .brief import AttackBriefModule
 from .employees import EmployeesModule
 from .playbook import PlaybookModule
 from .darkweb import DarkWebModule
+from .dnshistory import DNSHistoryModule
+from .buckets import BucketsModule
+from .cve import CVEModule
 
 __all__ = [
     "Finding",
@@ -41,4 +44,7 @@ __all__ = [
     "EmployeesModule",
     "PlaybookModule",
     "DarkWebModule",
+    "DNSHistoryModule",
+    "BucketsModule",
+    "CVEModule",
 ]
