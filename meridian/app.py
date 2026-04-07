@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import platform
+
+from rich.markup import escape
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +17,7 @@ from textual.containers import Horizontal, Vertical
 from textual.events import Click
 from textual.reactive import reactive
 from textual.theme import Theme
-from textual.widgets import Footer, Header, RichLog, Static, TabbedContent, TabPane
+from textual.widgets import Footer, Header, Input, RichLog, Static, TabbedContent, TabPane
 
 from .modules import (
     ASNModule,
@@ -28,6 +30,7 @@ from .modules import (
     DNSHistoryModule,
     DNSModule,
     EmployeesModule,
+    ExploitsModule,
     Finding,
     GitHubModule,
     HunterModule,
@@ -204,6 +207,211 @@ class ReconPanel(Vertical):
                     self.app.notify("Clipboard unavailable", severity="warning", timeout=2)
 
 
+# ── Terminal helpers ──────────────────────────────────────────────────────────
+
+def _install_hint(tool: str) -> str:
+    _INSTALLS = {
+        "swaks":    "brew install swaks",
+        "nuclei":   "brew install nuclei  OR  go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+        "hydra":    "brew install hydra",
+        "msfconsole": "brew install metasploit  OR  curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > msfinstall && chmod +x msfinstall && ./msfinstall",
+        "nmap":     "brew install nmap",
+        "sqlmap":   "brew install sqlmap",
+        "ffuf":     "brew install ffuf",
+        "aws":      "brew install awscli",
+        "curl":     "brew install curl",
+        "ruler":    "go install github.com/sensepost/ruler@latest",
+        "nikto":    "brew install nikto",
+        "gobuster": "brew install gobuster",
+        "wfuzz":    "brew install wfuzz",
+    }
+    return _INSTALLS.get(tool.lower(), "")
+
+
+def _failure_hints(cmd: str, output: list[str]) -> list[str]:
+    """Analyse command output and return contextual fix suggestions."""
+    combined = " ".join(output).lower()
+    hints: list[str] = []
+    tool = cmd.split()[0].lower() if cmd.split() else ""
+
+    # Spamhaus / blocklist rejection
+    if "block listed" in combined or "pbl" in combined or "spamhaus" in combined:
+        hints += [
+            "Your IP is on Spamhaus PBL (residential IPs are blocked by most mail servers).",
+            "Fix: run swaks from a clean VPS IP (DigitalOcean, Vultr, Linode).",
+            "Check your IP: https://check.spamhaus.org",
+        ]
+
+    # Generic SMTP rejection
+    if tool == "swaks" and ("550" in combined or "554" in combined or "reject" in combined):
+        hints += [
+            "SMTP 550/554 = mail rejected by the server.",
+            "Try a different FROM address or use --tls flag.",
+            "If domain has SPF 'softfail', try --from postmaster@" + (cmd.split("--from")[-1].split()[0].split("@")[-1] if "--from" in cmd else "domain.com"),
+        ]
+
+    # Connection refused / timeout
+    if "connection refused" in combined or "timed out" in combined or "no route" in combined:
+        hints += [
+            "Could not reach the target — firewall or wrong port.",
+            "Try: nmap -p 25,465,587 <host>  to check open SMTP ports.",
+            "Use --port 587 or --port 465 with --tls for submission ports.",
+        ]
+
+    # Auth required
+    if "auth" in combined and ("required" in combined or "535" in combined or "530" in combined):
+        hints += [
+            "Server requires authentication — open relay is not available.",
+            "Use leaked credentials if available: --auth-user user --auth-password pass",
+        ]
+
+    # Command not found (exit 127)
+    if "not found" in combined or "no such file" in combined:
+        install = _install_hint(tool)
+        if install:
+            hints.append(f"Install {tool}: {install}")
+
+    # Hydra failures
+    if tool == "hydra" and ("error" in combined or "invalid" in combined):
+        hints += [
+            "Check the login form URL and failure string are correct.",
+            "Try --http-get instead of https-post-form if the login uses GET.",
+            "Use -V for verbose output to see each attempt.",
+        ]
+
+    # Nuclei template missing
+    if tool == "nuclei" and ("no template" in combined or "not found" in combined):
+        hints += [
+            "Template not found — update nuclei templates: nuclei -update-templates",
+            "Or browse templates at: https://github.com/projectdiscovery/nuclei-templates",
+        ]
+
+    # AWS bucket access denied
+    if "aws" in tool and ("access denied" in combined or "403" in combined):
+        hints += [
+            "Bucket exists but is private — access denied.",
+            "Try listing without signing: aws s3 ls s3://<bucket> --no-sign-request",
+        ]
+
+    return hints
+
+
+# ── Execution terminal ────────────────────────────────────────────────────────
+
+class ExecTerminal(Vertical):
+    """Interactive terminal panel — run commands, stream output in real time."""
+
+    DEFAULT_CSS = """
+    ExecTerminal {
+        height: 1fr;
+        border: solid $surface-lighten-2;
+    }
+    ExecTerminal .term-header {
+        height: 1;
+        background: $panel;
+        color: $primary;
+        padding: 0 1;
+        text-style: bold;
+    }
+    ExecTerminal RichLog {
+        height: 1fr;
+        background: $background;
+        padding: 0 1;
+    }
+    ExecTerminal Input {
+        height: 3;
+        background: $surface;
+        border: solid $primary;
+        padding: 0 1;
+        dock: bottom;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Static(" Terminal", classes="term-header")
+        yield RichLog(id="term-log", highlight=True, markup=True, wrap=True)
+        yield Input(placeholder="Click here then type a command and press Enter", id="term-input")
+
+    def on_mount(self) -> None:
+        log = self.query_one("#term-log", RichLog)
+        log.write("[dim]Type a command and press Enter to execute.[/dim]")
+        log.write("[dim]Output streams in real time. Click any line to copy.[/dim]")
+        log.write("[yellow]⚠  Only run commands against targets you have written authorization to test.[/yellow]")
+        log.write("")
+
+    def on_click(self, event: Click) -> None:
+        """Click-to-copy on terminal output lines."""
+        log = self.query_one("#term-log", RichLog)
+        # Only handle clicks in the log area (not the input or header)
+        log_region = log.region
+        if log_region.contains(event.screen_x, event.screen_y):
+            rel_y = event.screen_y - log_region.y
+            line_idx = int(log.scroll_y) + rel_y
+            # Copy from _output_lines which we track ourselves
+            output = getattr(self, "_output_lines", [])
+            if output and 0 <= line_idx < len(output):
+                text = output[line_idx].strip()
+                if text:
+                    ok = _copy_to_clipboard(text)
+                    preview = text[:60] + ("..." if len(text) > 60 else "")
+                    self.app.notify(f"Copied: {preview}" if ok else "Clipboard unavailable", timeout=2)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        cmd = event.value.strip()
+        if not cmd:
+            return
+        event.input.value = ""
+        self._run_command(cmd)
+
+    @work(exclusive=False, thread=False)
+    async def _run_command(self, cmd: str) -> None:
+        log = self.query_one("#term-log", RichLog)
+        log.write(f"[bold green]$ {escape(cmd)}[/bold green]")
+        log.write("")
+
+        self._output_lines: list[str] = []
+
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                limit=1024 * 256,
+            )
+
+            assert proc.stdout is not None
+            async for raw in proc.stdout:
+                line = raw.decode(errors="replace").rstrip()
+                log.write(escape(line))
+                self._output_lines.append(line)
+
+            await proc.wait()
+            rc = proc.returncode
+            color = "green" if rc == 0 else "red"
+            log.write("")
+            log.write(f"[{color}]─── exit {rc} ───[/{color}]")
+            log.write("")
+
+            if rc != 0:
+                hints = _failure_hints(cmd, self._output_lines)
+                if hints:
+                    log.write("[yellow]━━━ Possible fixes ━━━[/yellow]")
+                    for h in hints:
+                        log.write(f"[dim]  {escape(h)}[/dim]")
+                    log.write("")
+
+        except FileNotFoundError as exc:
+            tool = cmd.split()[0] if cmd.split() else cmd
+            log.write(f"[red]Command not found: {escape(tool)}[/red]")
+            install = _install_hint(tool)
+            if install:
+                log.write(f"[yellow]  Install: {escape(install)}[/yellow]")
+            log.write("")
+        except Exception as exc:
+            log.write(f"[red]Error: {escape(str(exc))}[/red]")
+            log.write("")
+
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 
 class MeridianApp(App[None]):
@@ -327,6 +535,7 @@ class MeridianApp(App[None]):
         Binding("2", "switch_tab('tab-web')",        "Web",       show=False),
         Binding("3", "switch_tab('tab-offensive')",  "Offensive", show=False),
         Binding("4", "switch_tab('tab-brief')",      "Brief",     show=False),
+        Binding("5", "switch_tab('tab-exploit')",    "Exploit",   show=False),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
 
@@ -372,6 +581,9 @@ class MeridianApp(App[None]):
             (CVEModule(config, self._collect_panel_data), "cve")
         )
         self._module_map.append(
+            (ExploitsModule(config, self._collect_panel_data), "exploits")
+        )
+        self._module_map.append(
             (AttackBriefModule(config, self._collect_panel_data), "brief")
         )
         self._module_map.append(
@@ -383,7 +595,7 @@ class MeridianApp(App[None]):
         yield Static(
             f"[dim]>[/dim] [bold]{self.target}[/bold]"
             + ("  [yellow]◉ WATCH[/yellow]" if self._watch_mode else "")
-            + "  [dim]|[/dim]  [dim]1 Network  2 Web  3 Offensive  4 Brief[/dim]",
+            + "  [dim]|[/dim]  [dim]1 Network  2 Web  3 Offensive  4 Brief  5 Exploit[/dim]",
             id="status-bar",
         )
 
@@ -436,6 +648,13 @@ class MeridianApp(App[None]):
                     with Vertical(classes="col"):
                         yield ReconPanel("JS Secrets",   "jsscan")
                         yield ReconPanel("URL Params",   "params")
+
+            with TabPane("Exploit", id="tab-exploit"):
+                with Horizontal(classes="tab-layout"):
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Exploit Reference", "exploits")
+                    with Vertical(classes="col"):
+                        yield ExecTerminal()
 
         yield Footer()
 
@@ -574,7 +793,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.58.0",
+            "version": "0.70.0",
             "modules": {},
         }
 

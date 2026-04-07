@@ -22,6 +22,7 @@ _ENV_MAP = {
     "DEHASHED_API_KEY":  "dehashed_api_key",
     "SECTRAILS_API_KEY": "sectrails_api_key",
     "NVD_API_KEY":       "nvd_api_key",
+    "APOLLO_API_KEY":    "apollo_api_key",
 }
 
 

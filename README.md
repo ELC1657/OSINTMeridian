@@ -1,9 +1,13 @@
-# Meridian v0.58.0
+# Meridian `v0.70.0`
 
-Offensive recon aggregator for penetration testers. Type a target, get results from 22 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching.
+> ⚠️ **LEGAL DISCLAIMER — READ BEFORE USE**
+>
+> Meridian is intended for **authorized penetration testing, bug bounty programs, CTF competitions, and security research on systems you own or have explicit written permission to assess**. Running this tool against any system without explicit written authorization is illegal. The developer accepts no liability for misuse or damage. By using Meridian you confirm you have proper authorization. See [DISCLAIMER.md](DISCLAIMER.md) for full terms.
+
+Offensive recon aggregator for penetration testers. Type a target, get results from 22 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching. Includes an integrated exploit reference and execution terminal.
 
 ```
-Network  Web  Offensive  Brief
+Network  Web  Offensive  Brief  Exploit
 +--------------------+--------------------+--------------------+
 | Attack Brief  (12) | Playbook      (18) | JS Secrets     (3) |
 |                    |                    |                    |
@@ -16,7 +20,7 @@ Network  Web  Offensive  Brief
 |     emails (Hunter)|   + 42 emails      |   url=   (14 URLs) |
 |  2. SUBDOMAIN      |                    |   redirect= (8)    |
 |     TAKEOVER: 2    |   swaks --from     |                    |
-|     candidates     |   ceo@target.com \ | Interesting paths  |
+|     candidates     |   ceo@target.com   | Interesting paths  |
 |                    |   --to victim@...  |   Admin  (3)       |
 | HIGH               |                    |   /.env  (1) [!]   |
 |  1. BREACH DATA    | STEP 2  CRED STUFF |   /api/v1/  (14)   |
@@ -33,6 +37,7 @@ Network  Web  Offensive  Brief
 | Web | `2` | Subdomains (crt.sh), Wayback Machine, URLScan.io, Cloud Buckets |
 | Offensive | `3` | VirusTotal, GitHub, Hunter.io, Employee Targets, Takeover, Breach Intel, Dark Web |
 | Brief | `4` | Attack Brief, Playbook, JS Secrets, URL Params |
+| Exploit | `5` | Exploit Reference, Execution Terminal |
 
 ## Sources
 
@@ -49,7 +54,7 @@ Network  Web  Offensive  Brief
 | VirusTotal | Detection stats, reputation, historical IPs, subdomains | `VT_API_KEY` |
 | GitHub | 10 dork queries - passwords, secrets, `.env`, private keys, configs | `GITHUB_TOKEN` |
 | Hunter.io | Email discovery, org info, email pattern, confidence scores | `HUNTER_API_KEY` |
-| Employee Targets | Ranks every discovered employee by attack value (role + breach exposure) | `HUNTER_API_KEY` |
+| Employee Targets | Hunter.io + Apollo.io + GitHub org members, ranked by attack value | `HUNTER_API_KEY` / `APOLLO_API_KEY` / `GITHUB_TOKEN` |
 | Takeover | Checks all crt.sh subdomains for dangling CNAMEs across 20 known services | - |
 | Breach Intel | HIBP public breach list - domain + name match, pwn counts, data types | - |
 | Dark Web | IntelligenceX, BreachDirectory, Dehashed — leaked credentials, dark web mentions | `INTELX_API_KEY` / `RAPIDAPI_KEY` / `DEHASHED_API_KEY` |
@@ -58,10 +63,9 @@ Network  Web  Offensive  Brief
 | DNS History | SecurityTrails — all historical A, MX, NS records with date ranges | `SECTRAILS_API_KEY` |
 | Cloud Buckets | Probes 78 permutations across AWS S3, GCP Storage, Azure Blob for open/existing buckets | - |
 | CVE Correlation | Cross-references detected tech stack against NVD for HIGH/CRITICAL CVEs | `NVD_API_KEY` (optional) |
+| Exploit Reference | Auto-generated exploit commands from CVEs, spoofability, leaked creds, SSRF, buckets | - |
 | Attack Brief | Waits for all modules, synthesizes findings into CRITICAL / HIGH / MEDIUM / INFO | - |
 | Playbook | Generates a numbered, tool-ready attack plan based on what was actually found | - |
-
-Seven sources work with zero configuration. Multiple optional API keys unlock additional sources.
 
 ## Install
 
@@ -81,13 +85,19 @@ The script creates a `.venv`, installs all dependencies, and symlinks `meridian`
 meridian example.com
 ```
 
+Meridian will prompt you to confirm you have written authorization before starting. To skip the prompt (e.g. in scripts):
+
+```bash
+meridian example.com -y
+```
+
 ```bash
 # Pass keys inline
-meridian example.com --shodan-key=xxx --vt-key=yyy --github-token=zzz
+meridian example.com -y --shodan-key=xxx --vt-key=yyy --github-token=zzz
 
 # Keys from environment
 export SHODAN_API_KEY=xxx
-meridian example.com
+meridian example.com -y
 ```
 
 ### Watch mode
@@ -105,7 +115,7 @@ The status bar shows `◉ WATCH` when active. A notification fires before each r
 
 | Key | Action |
 |---|---|
-| `1` / `2` / `3` / `4` | Switch tabs (Network / Web / Offensive / Brief) |
+| `1` / `2` / `3` / `4` / `5` | Switch tabs (Network / Web / Offensive / Brief / Exploit) |
 | `t` | Cycle through all available themes |
 | `s` | Save plain-text report to `meridian_<target>_<timestamp>.txt` |
 | `j` | Save JSON report to `meridian_<target>_<timestamp>.json` |
@@ -117,6 +127,26 @@ Click any finding to copy it to the clipboard.
 ## Themes
 
 Press `t` to cycle through every installed Textual theme. Custom themes — Matrix and Blood — are always first in the cycle. The notify shows your position: `Theme: Dracula  (4/14)`.
+
+## Exploit Tab
+
+The **Exploit** tab (press `5`) is split into two panels:
+
+**Left — Exploit Reference** (auto-populates after recon finishes):
+- CVE → Metasploit `use exploit/...` command + Nuclei template + ExploitDB link
+- Spoofable domain → `swaks` phishing command using real MX server from DNS panel
+- Open S3/GCP/Azure buckets → `aws s3 ls` + sync dump commands
+- Leaked plaintext passwords → `hydra` spray commands for SSH, web login, OWA/Exchange
+- SSRF candidates → `curl` AWS metadata probe commands
+- Subdomain takeovers → instructions to claim the service
+
+**Right — Execution Terminal**:
+- Type any command, press Enter — output streams live
+- On failure: contextual fix suggestions (blocklist workarounds, missing tools, auth errors)
+- On command not found: install command shown immediately (`brew install ...`)
+- Click any output line to copy it
+
+> All exploit commands are for use during **authorized engagements only**. You are solely responsible for what you execute.
 
 ## Attack Brief and Playbook
 
@@ -143,17 +173,22 @@ STEP 2  CREDENTIAL STUFFING  HIGH
 
 ## Employee Targets
 
-The **Employee Targets** panel (Offensive tab) scores every employee discovered via Hunter.io by attack value:
+The **Employee Targets** panel (Offensive tab) queries three sources and merges/deduplicates results:
 
+| Source | Returns | Key |
+|---|---|---|
+| Hunter.io | Emails, names, roles, confidence scores | `HUNTER_API_KEY` |
+| Apollo.io | Names, titles, emails, LinkedIn URLs, location | `APOLLO_API_KEY` |
+| GitHub org | Public org members — name, bio, email, GitHub URL | `GITHUB_TOKEN` |
+
+Each employee is scored by attack value (0–10) based on role keyword matching:
 - Score 9-10 (red `HIGH VALUE`): CEO, CFO, CTO, CISO, president, founder
 - Score 7-8 (yellow `MED VALUE`): IT director, sysadmin, finance, devops, cloud
 - Score 3-6: Engineering, sales, support
 
-Each entry shows name, role, email, Hunter confidence percentage, and a visual score bar.
-
 ## Dark Web
 
-The **Dark Web** panel (Offensive tab) queries up to three breach intelligence sources and surfaces actual leaked credentials, not just breach metadata.
+The **Dark Web** panel (Offensive tab) queries up to three breach intelligence sources:
 
 | Source | What it finds | Key |
 |---|---|---|
@@ -161,50 +196,34 @@ The **Dark Web** panel (Offensive tab) queries up to three breach intelligence s
 | BreachDirectory | Email:password and email:hash pairs from public dumps | `RAPIDAPI_KEY` |
 | Dehashed | 15B+ records — plaintext passwords, hashed passwords, usernames, database names | `DEHASHED_API_KEY` |
 
-All three are optional — any combination works.
-
 ## DNS History
 
-The **DNS History** panel (Network tab) queries SecurityTrails for every historical A, MX, and NS record with first-seen and last-seen dates. Finds decommissioned infrastructure, old mail servers, and previous hosting providers that may still be reachable.
-
-Requires a free SecurityTrails API key (50 queries/month on free tier).
+The **DNS History** panel (Network tab) queries SecurityTrails for every historical A, MX, and NS record with first-seen and last-seen dates. Finds decommissioned infrastructure, old mail servers, and previous hosting providers.
 
 ## Cloud Buckets
 
-The **Cloud Buckets** panel (Web tab) probes 78 name permutations across AWS S3, GCP Cloud Storage, and Azure Blob Storage — no API key needed. Results are classified as:
+The **Cloud Buckets** panel (Web tab) probes 78 name permutations across AWS S3, GCP Cloud Storage, and Azure Blob Storage — no API key needed:
 
-- `PUBLIC` (HTTP 200) — open read access, immediate finding
-- `EXISTS (private)` (HTTP 403/400) — bucket exists, worth noting for misconfiguration monitoring
+- `PUBLIC` (HTTP 200) — open read access
+- `EXISTS (private)` (HTTP 403/400) — bucket exists but locked down
 
 ## CVE Correlation
 
-The **CVE Correlation** panel (Network tab) waits for URLScan.io and Shodan to finish, extracts the detected technology stack, then queries the NVD for HIGH and CRITICAL CVEs against each technology. No API key required — adding `NVD_API_KEY` raises the rate limit from 1 query per 6.5s to 1 per 0.3s.
+The **CVE Correlation** panel (Network tab) waits for URLScan.io and Shodan to finish, extracts the tech stack, then queries NVD for HIGH/CRITICAL CVEs. `NVD_API_KEY` is optional but raises the rate limit significantly.
 
 ## JSON export
 
-Press `j` to save a machine-readable report. Pipe into other tools with `jq`:
+Press `j` to save a machine-readable report:
 
 ```bash
-# All subdomains
-jq '.modules.crtsh.findings[]' meridian_example_com_*.json
-
-# DNS history
-jq '.modules.dnshistory.findings[]' meridian_example_com_*.json
-
-# Cloud bucket results
-jq '.modules.buckets.findings[]' meridian_example_com_*.json
-
-# CVE matches
-jq '.modules.cve.findings[]' meridian_example_com_*.json
-
-# Dark web findings
-jq '.modules.darkweb.findings[]' meridian_example_com_*.json
-
-# Attack brief
-jq '.modules.brief.findings[]' meridian_example_com_*.json
-
-# Feed subdomains into ffuf
-jq -r '.modules.crtsh.findings[]' meridian_example_com_*.json | ffuf ...
+jq '.modules.crtsh.findings[]'     meridian_example_com_*.json  # subdomains
+jq '.modules.dnshistory.findings[]' meridian_example_com_*.json  # DNS history
+jq '.modules.buckets.findings[]'   meridian_example_com_*.json  # cloud buckets
+jq '.modules.cve.findings[]'       meridian_example_com_*.json  # CVE matches
+jq '.modules.darkweb.findings[]'   meridian_example_com_*.json  # dark web
+jq '.modules.exploits.findings[]'  meridian_example_com_*.json  # exploit commands
+jq '.modules.brief.findings[]'     meridian_example_com_*.json  # attack brief
+jq -r '.modules.crtsh.findings[]'  meridian_example_com_*.json | ffuf ...
 ```
 
 ## API keys
@@ -213,15 +232,16 @@ jq -r '.modules.crtsh.findings[]' meridian_example_com_*.json | ffuf ...
 |---|---|---|---|
 | `SHODAN_API_KEY` | [account.shodan.io](https://account.shodan.io/) | Free | Host enumeration, open ports, CVEs, DNS subdomains |
 | `VT_API_KEY` | [virustotal.com/gui/my-apikey](https://www.virustotal.com/gui/my-apikey) | Free | Detections, reputation, historical IPs, subdomains |
-| `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) (public_repo scope) | Free | Code search dorks - 30 req/min instead of 10 |
+| `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) (public_repo scope) | Free | Code search dorks + GitHub org member enumeration |
 | `HUNTER_API_KEY` | [hunter.io/users/sign_up](https://hunter.io/users/sign_up) | Free | Email discovery, employee scoring, org intel |
+| `APOLLO_API_KEY` | [apollo.io](https://apollo.io) | Free (75 credits/mo) | Employee names, titles, LinkedIn URLs |
 | `INTELX_API_KEY` | [intelx.io](https://intelx.io) | Free (10 searches/mo) | Dark web mentions, paste sites, ransomware leaks |
 | `RAPIDAPI_KEY` | [rapidapi.com](https://rapidapi.com) → BreachDirectory | Free (50 req/mo) | Email:password pairs from public dumps |
 | `DEHASHED_API_KEY` | [dehashed.com](https://dehashed.com) | Paid (~$5/mo) | 15B+ records with plaintext passwords |
 | `SECTRAILS_API_KEY` | [securitytrails.com](https://securitytrails.com) | Free (50 queries/mo) | DNS history — past IPs, nameservers, mail servers |
 | `NVD_API_KEY` | [nvd.nist.gov/developers/request-an-api-key](https://nvd.nist.gov/developers/request-an-api-key) | Free | CVE queries at 50 req/30s instead of 5 req/30s |
 
-Store keys in `~/.config/meridian/.env` so they work from any directory:
+Store keys in `~/.config/meridian/.env`:
 
 ```bash
 mkdir -p ~/.config/meridian
@@ -252,6 +272,10 @@ make uninstall   # removes ~/.local/bin/meridian
 rm -rf .venv     # optionally remove the venv
 ```
 
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ## Legal
 
-Meridian performs passive reconnaissance only — it queries public APIs and databases, not the target directly. You are still responsible for ensuring you have authorization before running any recon against a target. See [SECURITY.md](SECURITY.md).
+See [DISCLAIMER.md](DISCLAIMER.md) for full terms. Meridian performs passive reconnaissance and provides an exploit reference for use during authorized engagements only. You are solely responsible for ensuring you have authorization before running Meridian against any target.

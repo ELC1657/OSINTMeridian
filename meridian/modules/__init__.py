@@ -21,6 +21,7 @@ from .darkweb import DarkWebModule
 from .dnshistory import DNSHistoryModule
 from .buckets import BucketsModule
 from .cve import CVEModule
+from .exploits import ExploitsModule
 
 __all__ = [
     "Finding",
@@ -47,4 +48,5 @@ __all__ = [
     "DNSHistoryModule",
     "BucketsModule",
     "CVEModule",
+    "ExploitsModule",
 ]
