@@ -22,6 +22,7 @@ from .modules import (
     AttackBriefModule,
     BreachModule,
     CrtShModule,
+    DarkWebModule,
     DNSModule,
     EmployeesModule,
     Finding,
@@ -357,6 +358,7 @@ class MeridianApp(App[None]):
             (EmployeesModule(config),  "employees"),
             (TakeoverModule(config),   "takeover"),
             (BreachModule(config),     "breach"),
+            (DarkWebModule(config),    "darkweb"),
             (JSScanModule(config),     "jsscan"),
             (ParamsModule(config),     "params"),
         ]
@@ -409,6 +411,8 @@ class MeridianApp(App[None]):
                     with Vertical(classes="col"):
                         yield ReconPanel("Breach Intel",     "breach")
                         yield ReconPanel("Employee Targets", "employees")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Dark Web",         "darkweb")
 
             with TabPane("Brief", id="tab-brief"):
                 with Horizontal(classes="tab-layout"):
@@ -557,7 +561,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.50.0",
+            "version": "0.55.0",
             "modules": {},
         }
 

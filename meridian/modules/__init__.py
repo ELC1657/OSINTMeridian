@@ -17,6 +17,7 @@ from .params import ParamsModule
 from .brief import AttackBriefModule
 from .employees import EmployeesModule
 from .playbook import PlaybookModule
+from .darkweb import DarkWebModule
 
 __all__ = [
     "Finding",
@@ -39,4 +40,5 @@ __all__ = [
     "AttackBriefModule",
     "EmployeesModule",
     "PlaybookModule",
+    "DarkWebModule",
 ]

@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.50.0  | yes |
+| 0.55.0  | yes |
+| 0.50.0  | no |
 | 0.14.1  | no |
 | 0.13.1  | no |
 | 0.12.0  | no |
@@ -17,6 +18,8 @@ Meridian is a passive reconnaissance tool designed for use during **authorized p
 Passive reconnaissance means Meridian only queries public third-party databases and APIs. It does not send packets directly to the target, exploit vulnerabilities, or perform active scanning.
 
 The Playbook and Attack Brief panels generate attack chain suggestions based on discovered data. These suggestions are informational only — executing them against any system without explicit written authorization is illegal.
+
+The Dark Web panel queries breach intelligence services (IntelligenceX, BreachDirectory, Dehashed) for leaked credentials associated with the target domain. This data is read-only and sourced from existing public or commercial breach databases.
 
 ## Authorized use only
 
@@ -38,6 +41,9 @@ Meridian does not collect or transmit any data about you or your targets. All qu
 - Hunter.io: [hunter.io/privacy-policy](https://hunter.io/privacy-policy)
 - HaveIBeenPwned: [haveibeenpwned.com/Privacy](https://haveibeenpwned.com/Privacy)
 - BGPView: [bgpview.io](https://bgpview.io)
+- IntelligenceX: [intelx.io/privacy](https://intelx.io/privacy)
+- BreachDirectory / RapidAPI: [rapidapi.com/privacy](https://rapidapi.com/privacy)
+- Dehashed: [dehashed.com/privacy](https://dehashed.com/privacy)
 
 API keys are stored locally in `~/.config/meridian/.env` or `~/.config/meridian/keys.toml` and are never sent anywhere except to their respective services. They are never committed to git.
 
@@ -55,4 +61,4 @@ We will coordinate a fix and disclosure timeline with you.
 
 ## Scope of this policy
 
-This policy covers the Meridian source code and its direct dependencies. Vulnerabilities in third-party APIs (Shodan, VirusTotal, etc.) should be reported to those vendors directly.
+This policy covers the Meridian source code and its direct dependencies. Vulnerabilities in third-party APIs (Shodan, VirusTotal, Dehashed, etc.) should be reported to those vendors directly.

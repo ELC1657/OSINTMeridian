@@ -1,6 +1,6 @@
-# Meridian v0.50.0
+# Meridian v0.55.0
 
-Offensive recon aggregator for penetration testers. Type a target, get results from 18 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching.
+Offensive recon aggregator for penetration testers. Type a target, get results from 19 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching.
 
 ```
 Network  Web  Offensive  Brief
@@ -31,7 +31,7 @@ Network  Web  Offensive  Brief
 |---|---|---|
 | Network | `1` | DNS Records, WHOIS, Spoofability, Shodan, ASN / IP Ranges |
 | Web | `2` | Subdomains (crt.sh), Wayback Machine, URLScan.io |
-| Offensive | `3` | VirusTotal, GitHub, Hunter.io, Employee Targets, Takeover, Breach Intel |
+| Offensive | `3` | VirusTotal, GitHub, Hunter.io, Employee Targets, Takeover, Breach Intel, Dark Web |
 | Brief | `4` | Attack Brief, Playbook, JS Secrets, URL Params |
 
 ## Sources
@@ -52,12 +52,13 @@ Network  Web  Offensive  Brief
 | Employee Targets | Ranks every discovered employee by attack value (role + breach exposure) | `HUNTER_API_KEY` |
 | Takeover | Checks all crt.sh subdomains for dangling CNAMEs across 20 known services | - |
 | Breach Intel | HIBP public breach list - domain + name match, pwn counts, data types | - |
+| Dark Web | IntelligenceX, BreachDirectory, Dehashed — leaked credentials, dark web mentions | `INTELX_API_KEY` / `RAPIDAPI_KEY` / `DEHASHED_API_KEY` |
 | JS Secrets | Fetches archived JS files, scans for AWS keys, tokens, JWTs, passwords | - |
 | URL Params | Mines 8,000 archived URLs for SSRF candidates, injection params, sensitive paths | - |
 | Attack Brief | Waits for all modules, synthesizes findings into CRITICAL / HIGH / MEDIUM / INFO | - |
 | Playbook | Generates a numbered, tool-ready attack plan based on what was actually found | - |
 
-Seven sources work with zero configuration. Four need free API keys.
+Seven sources work with zero configuration. Four need free API keys. Three optional dark web sources require separate keys.
 
 ## Install
 
@@ -147,6 +148,18 @@ The **Employee Targets** panel (Offensive tab) scores every employee discovered 
 
 Each entry shows name, role, email, Hunter confidence percentage, and a visual score bar.
 
+## Dark Web
+
+The **Dark Web** panel (Offensive tab) queries up to three breach intelligence sources and surfaces actual leaked credentials, not just breach metadata.
+
+| Source | What it finds | Key |
+|---|---|---|
+| IntelligenceX | Dark web forum posts, Tor site mentions, ransomware group leaks, paste sites | `INTELX_API_KEY` |
+| BreachDirectory | Email:password and email:hash pairs from public dumps | `RAPIDAPI_KEY` |
+| Dehashed | 15B+ records — plaintext passwords, hashed passwords, usernames, database names | `DEHASHED_EMAIL` + `DEHASHED_API_KEY` |
+
+All three are optional — any combination works. If no keys are set, the panel lists exactly what to get and where. The panel runs automatically when keys are present.
+
 ## JSON export
 
 Press `j` to save a machine-readable report. Pipe into other tools with `jq`:
@@ -161,6 +174,9 @@ jq '.modules.dns.findings[]' meridian_example_com_*.json
 # Employee target list
 jq '.modules.employees.findings[]' meridian_example_com_*.json
 
+# Dark web findings
+jq '.modules.darkweb.findings[]' meridian_example_com_*.json
+
 # Attack brief
 jq '.modules.brief.findings[]' meridian_example_com_*.json
 
@@ -170,14 +186,15 @@ jq -r '.modules.crtsh.findings[]' meridian_example_com_*.json | ffuf ...
 
 ## API keys
 
-All keys are free tier.
-
-| Key | Where to get it | What it unlocks |
-|---|---|---|
-| `SHODAN_API_KEY` | [account.shodan.io](https://account.shodan.io/) | Host enumeration, open ports, CVEs, DNS subdomains |
-| `VT_API_KEY` | [virustotal.com/gui/my-apikey](https://www.virustotal.com/gui/my-apikey) | Detections, reputation, historical IPs, subdomains |
-| `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) (public_repo scope) | Code search dorks - 30 req/min instead of 10 |
-| `HUNTER_API_KEY` | [hunter.io/users/sign_up](https://hunter.io/users/sign_up) | Email discovery, employee scoring, org intel |
+| Key | Where to get it | Cost | What it unlocks |
+|---|---|---|---|
+| `SHODAN_API_KEY` | [account.shodan.io](https://account.shodan.io/) | Free | Host enumeration, open ports, CVEs, DNS subdomains |
+| `VT_API_KEY` | [virustotal.com/gui/my-apikey](https://www.virustotal.com/gui/my-apikey) | Free | Detections, reputation, historical IPs, subdomains |
+| `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) (public_repo scope) | Free | Code search dorks - 30 req/min instead of 10 |
+| `HUNTER_API_KEY` | [hunter.io/users/sign_up](https://hunter.io/users/sign_up) | Free | Email discovery, employee scoring, org intel |
+| `INTELX_API_KEY` | [intelx.io](https://intelx.io) | Free (10 searches/mo) | Dark web mentions, paste sites, ransomware leaks |
+| `RAPIDAPI_KEY` | [rapidapi.com](https://rapidapi.com) → BreachDirectory | Free (50 req/mo) | Email:password pairs from public dumps |
+| `DEHASHED_API_KEY` | [dehashed.com](https://dehashed.com) | Paid (~$5/mo) | 15B+ records with plaintext passwords |
 
 Store keys in `~/.config/meridian/.env` so they work from any directory:
 
@@ -193,7 +210,7 @@ Keys are loaded in this order (later overrides earlier):
 2. `~/.config/meridian/.env`
 3. Environment variables
 4. `.env` in current directory
-5. CLI flags (`--shodan-key`, `--vt-key`, `--github-token`)
+5. CLI flags (`--shodan-key`, `--vt-key`, `--github-token`, etc.)
 
 ## Updating
 
