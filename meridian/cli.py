@@ -9,19 +9,21 @@ from .app import MeridianApp
 from .config import load_config
 
 _DISCLAIMER = """
-╔══════════════════════════════════════════════════════════════════╗
-║                  MERIDIAN — LEGAL NOTICE                        ║
-╠══════════════════════════════════════════════════════════════════╣
-║  This tool is for AUTHORIZED penetration testing only.          ║
-║                                                                  ║
-║  You must have EXPLICIT WRITTEN PERMISSION from the system      ║
-║  owner before running Meridian against any target.              ║
-║                                                                  ║
-║  Unauthorized use is illegal under the CFAA (US), Computer      ║
-║  Misuse Act (UK), and equivalent laws worldwide.                 ║
-║                                                                  ║
-║  The developer accepts NO LIABILITY for misuse or damage.       ║
-╚══════════════════════════════════════════════════════════════════╝
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MERIDIAN — LEGAL NOTICE
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   This tool is for AUTHORIZED penetration testing only.
+
+   You must have EXPLICIT WRITTEN PERMISSION from the
+   system owner before running Meridian against any target.
+
+   Unauthorized use is illegal under the CFAA (US),
+   Computer Misuse Act (UK), and equivalent laws worldwide.
+
+   The developer accepts NO LIABILITY for misuse or damage.
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 

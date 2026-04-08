@@ -1,4 +1,4 @@
-# Meridian `v0.72.1`
+# Meridian `v0.72.2`
 
 > ⚠️ **LEGAL DISCLAIMER — READ BEFORE USE**
 >
