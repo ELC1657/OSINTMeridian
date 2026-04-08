@@ -1,4 +1,4 @@
-# Meridian `v0.70.0`
+# Meridian `v0.72.1`
 
 > ⚠️ **LEGAL DISCLAIMER — READ BEFORE USE**
 >
@@ -122,7 +122,7 @@ The status bar shows `◉ WATCH` when active. A notification fires before each r
 | `r` | Re-run all modules against the same target |
 | `q` | Quit |
 
-Click any finding to copy it to the clipboard.
+Click any finding to copy it to the clipboard. In the Exploit Reference panel, clicking a command line copies the bare command (the `$ ` prefix is stripped automatically).
 
 ## Themes
 
@@ -142,9 +142,12 @@ The **Exploit** tab (press `5`) is split into two panels:
 
 **Right — Execution Terminal**:
 - Type any command, press Enter — output streams live
+- `↑` / `↓` to cycle through command history (shell-style)
+- Type `clear` to wipe the terminal output
 - On failure: contextual fix suggestions (blocklist workarounds, missing tools, auth errors)
 - On command not found: install command shown immediately (`brew install ...`)
 - Click any output line to copy it
+- Switching to the Exploit tab auto-focuses the input — start typing immediately
 
 > All exploit commands are for use during **authorized engagements only**. You are solely responsible for what you execute.
 

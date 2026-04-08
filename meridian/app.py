@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import platform
+import re
 
 from rich.markup import escape
 import subprocess
@@ -14,7 +15,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.events import Click
+from textual.events import Click, Key
 from textual.reactive import reactive
 from textual.theme import Theme
 from textual.widgets import Footer, Header, Input, RichLog, Static, TabbedContent, TabPane
@@ -146,6 +147,7 @@ class ReconPanel(Vertical):
         self._title = title
         self._pid = panel_id
         self._findings: list[str] = []
+        self._all_lines: list[str] = []  # mirrors every write to RichLog for click-to-copy
 
     def compose(self) -> ComposeResult:
         yield Static(self._render_header(), id=f"hdr-{self._pid}", classes="panel-header")
@@ -167,11 +169,14 @@ class ReconPanel(Vertical):
 
     def write_finding(self, finding: Finding) -> None:
         self.query_one(RichLog).write(finding.format_rich())
-        self._findings.append(finding.format_plain())
+        plain = finding.format_plain()
+        self._findings.append(plain)
+        self._all_lines.append(plain)
         self.count += 1
 
     def write_line(self, text: str) -> None:
         self.query_one(RichLog).write(text)
+        self._all_lines.append(re.sub(r"\[/?[^\]]*\]", "", text).strip())
 
     def set_running(self) -> None:
         self.status = "running"
@@ -186,6 +191,7 @@ class ReconPanel(Vertical):
     def clear(self) -> None:
         self.query_one(RichLog).clear()
         self._findings.clear()
+        self._all_lines.clear()
         self.count = 0
         self.status = "idle"
 
@@ -196,8 +202,11 @@ class ReconPanel(Vertical):
         # y=0 is the header bar, y=1+ is the log area
         log = self.query_one(RichLog)
         line_idx = int(log.scroll_y) + max(0, event.y - 1)
-        if 0 <= line_idx < len(self._findings):
-            text = self._findings[line_idx].strip()
+        if 0 <= line_idx < len(self._all_lines):
+            text = self._all_lines[line_idx].strip()
+            # Strip the "$ " command prefix so the raw command is copied
+            if text.startswith("$ "):
+                text = text[2:]
             if text:
                 ok = _copy_to_clipboard(text)
                 preview = text[:60] + ("..." if len(text) > 60 else "")
@@ -296,6 +305,43 @@ def _failure_hints(cmd: str, output: list[str]) -> list[str]:
     return hints
 
 
+# ── Terminal input with command history ───────────────────────────────────────
+
+class TermInput(Input):
+    """Single-line input widget with shell-style up/down command history."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._history: list[str] = []
+        self._hist_idx: int = -1  # -1 = not browsing history
+
+    def push_history(self, cmd: str) -> None:
+        if cmd and (not self._history or self._history[-1] != cmd):
+            self._history.append(cmd)
+        self._hist_idx = -1
+
+    def on_key(self, event: Key) -> None:
+        if event.key == "up" and self._history:
+            if self._hist_idx == -1:
+                self._hist_idx = len(self._history) - 1
+            elif self._hist_idx > 0:
+                self._hist_idx -= 1
+            self.value = self._history[self._hist_idx]
+            self.cursor_position = len(self.value)
+            event.prevent_default()
+            event.stop()
+        elif event.key == "down" and self._hist_idx != -1:
+            if self._hist_idx < len(self._history) - 1:
+                self._hist_idx += 1
+                self.value = self._history[self._hist_idx]
+            else:
+                self._hist_idx = -1
+                self.value = ""
+            self.cursor_position = len(self.value)
+            event.prevent_default()
+            event.stop()
+
+
 # ── Execution terminal ────────────────────────────────────────────────────────
 
 class ExecTerminal(Vertical):
@@ -318,7 +364,7 @@ class ExecTerminal(Vertical):
         background: $background;
         padding: 0 1;
     }
-    ExecTerminal Input {
+    ExecTerminal TermInput {
         height: 3;
         background: $surface;
         border: solid $primary;
@@ -327,30 +373,38 @@ class ExecTerminal(Vertical):
     }
     """
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._term_lines: list[str] = []  # all display lines, mirrors RichLog
+
+    def _write(self, text: str) -> None:
+        """Write to the terminal log and track in _term_lines for click-to-copy."""
+        self.query_one("#term-log", RichLog).write(text)
+        self._term_lines.append(re.sub(r"\[/?[^\]]*\]", "", text).strip())
+
     def compose(self) -> ComposeResult:
-        yield Static(" Terminal", classes="term-header")
+        yield Static(" Terminal  [dim](↑↓ history · type 'clear' to reset)[/dim]", classes="term-header")
         yield RichLog(id="term-log", highlight=True, markup=True, wrap=True)
-        yield Input(placeholder="Click here then type a command and press Enter", id="term-input")
+        yield TermInput(placeholder="Type a command and press Enter…", id="term-input")
 
     def on_mount(self) -> None:
-        log = self.query_one("#term-log", RichLog)
-        log.write("[dim]Type a command and press Enter to execute.[/dim]")
-        log.write("[dim]Output streams in real time. Click any line to copy.[/dim]")
-        log.write("[yellow]⚠  Only run commands against targets you have written authorization to test.[/yellow]")
-        log.write("")
+        self._write("[dim]Type a command and press Enter to execute.[/dim]")
+        self._write("[dim]Click any output line to copy it. Use ↑↓ to browse history.[/dim]")
+        self._write("[yellow]⚠  Only run commands against targets you have written authorization to test.[/yellow]")
+        self._write("")
 
     def on_click(self, event: Click) -> None:
         """Click-to-copy on terminal output lines."""
         log = self.query_one("#term-log", RichLog)
-        # Only handle clicks in the log area (not the input or header)
         log_region = log.region
         if log_region.contains(event.screen_x, event.screen_y):
             rel_y = event.screen_y - log_region.y
             line_idx = int(log.scroll_y) + rel_y
-            # Copy from _output_lines which we track ourselves
-            output = getattr(self, "_output_lines", [])
-            if output and 0 <= line_idx < len(output):
-                text = output[line_idx].strip()
+            if 0 <= line_idx < len(self._term_lines):
+                text = self._term_lines[line_idx].strip()
+                # Strip "$ " command prefix so the bare command is copied
+                if text.startswith("$ "):
+                    text = text[2:]
                 if text:
                     ok = _copy_to_clipboard(text)
                     preview = text[:60] + ("..." if len(text) > 60 else "")
@@ -360,16 +414,27 @@ class ExecTerminal(Vertical):
         cmd = event.value.strip()
         if not cmd:
             return
-        event.input.value = ""
+        inp = self.query_one("#term-input", TermInput)
+        inp.value = ""
+
+        # Built-in clear command
+        if cmd.lower() in ("clear", "cls"):
+            log = self.query_one("#term-log", RichLog)
+            log.clear()
+            self._term_lines.clear()
+            self._write("[dim]Cleared.[/dim]")
+            self._write("")
+            return
+
+        inp.push_history(cmd)
         self._run_command(cmd)
 
     @work(exclusive=False, thread=False)
     async def _run_command(self, cmd: str) -> None:
-        log = self.query_one("#term-log", RichLog)
-        log.write(f"[bold green]$ {escape(cmd)}[/bold green]")
-        log.write("")
+        self._write(f"[bold green]$ {escape(cmd)}[/bold green]")
+        self._write("")
 
-        self._output_lines: list[str] = []
+        raw_output: list[str] = []
 
         try:
             proc = await asyncio.create_subprocess_shell(
@@ -382,34 +447,34 @@ class ExecTerminal(Vertical):
             assert proc.stdout is not None
             async for raw in proc.stdout:
                 line = raw.decode(errors="replace").rstrip()
-                log.write(escape(line))
-                self._output_lines.append(line)
+                self._write(escape(line))
+                raw_output.append(line)
 
             await proc.wait()
             rc = proc.returncode
             color = "green" if rc == 0 else "red"
-            log.write("")
-            log.write(f"[{color}]─── exit {rc} ───[/{color}]")
-            log.write("")
+            self._write("")
+            self._write(f"[{color}]─── exit {rc} ───[/{color}]")
+            self._write("")
 
             if rc != 0:
-                hints = _failure_hints(cmd, self._output_lines)
+                hints = _failure_hints(cmd, raw_output)
                 if hints:
-                    log.write("[yellow]━━━ Possible fixes ━━━[/yellow]")
+                    self._write("[yellow]━━━ Possible fixes ━━━[/yellow]")
                     for h in hints:
-                        log.write(f"[dim]  {escape(h)}[/dim]")
-                    log.write("")
+                        self._write(f"[dim]  {escape(h)}[/dim]")
+                    self._write("")
 
-        except FileNotFoundError as exc:
+        except FileNotFoundError:
             tool = cmd.split()[0] if cmd.split() else cmd
-            log.write(f"[red]Command not found: {escape(tool)}[/red]")
+            self._write(f"[red]Command not found: {escape(tool)}[/red]")
             install = _install_hint(tool)
             if install:
-                log.write(f"[yellow]  Install: {escape(install)}[/yellow]")
-            log.write("")
+                self._write(f"[yellow]  Install: {escape(install)}[/yellow]")
+            self._write("")
         except Exception as exc:
-            log.write(f"[red]Error: {escape(str(exc))}[/red]")
-            log.write("")
+            self._write(f"[red]Error: {escape(str(exc))}[/red]")
+            self._write("")
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -754,6 +819,13 @@ class MeridianApp(App[None]):
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one(TabbedContent).active = tab_id
 
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        if event.pane.id == "tab-exploit":
+            try:
+                self.query_one("#term-input", TermInput).focus()
+            except Exception:
+                pass
+
     def action_rerun(self) -> None:
         for _, panel_id in self._module_map:
             panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
@@ -793,7 +865,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.70.0",
+            "version": "0.72.1",
             "modules": {},
         }
 
