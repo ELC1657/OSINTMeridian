@@ -1,4 +1,4 @@
-# Meridian `v0.72.2`
+# Meridian `v0.73.0`
 
 > ⚠️ **LEGAL DISCLAIMER — READ BEFORE USE**
 >
@@ -33,7 +33,7 @@ Network  Web  Offensive  Brief  Exploit
 
 | Tab | Key | Panels |
 |---|---|---|
-| Network | `1` | DNS Records, WHOIS, Spoofability, Shodan, ASN / IP Ranges, DNS History, CVE Correlation |
+| Network | `1` | DNS Records, WHOIS, Spoofability, Shodan, ASN / IP Ranges, Port Scan, DNS History, CVE Correlation |
 | Web | `2` | Subdomains (crt.sh), Wayback Machine, URLScan.io, Cloud Buckets |
 | Offensive | `3` | VirusTotal, GitHub, Hunter.io, Employee Targets, Takeover, Breach Intel, Dark Web |
 | Brief | `4` | Attack Brief, Playbook, JS Secrets, URL Params |
@@ -50,6 +50,7 @@ Network  Web  Offensive  Brief  Exploit
 | Wayback Machine | CDX API - archived URLs, flags `.env`, `.bak`, `/admin`, `/api` | - |
 | URLScan.io | Tech stack, security headers, IPs, malicious verdict | - |
 | Shodan | Host search, open ports, CVEs, DNS subdomains | `SHODAN_API_KEY` |
+| Port Scan | Active nmap scan — two phases: fast top-1000 TCP, then `-sV -sC` on open ports. Flags high-risk services (RDP, SMB, Redis, etc.) in red. Requires `nmap` installed. | - |
 | ASN / IP Ranges | BGPView - ASN number, org name, all owned IPv4/IPv6 prefixes | - |
 | VirusTotal | Detection stats, reputation, historical IPs, subdomains | `VT_API_KEY` |
 | GitHub | 10 dork queries - passwords, secrets, `.env`, private keys, configs | `GITHUB_TOKEN` |
@@ -77,7 +78,7 @@ cd OSINTMeridian
 
 The script creates a `.venv`, installs all dependencies, and symlinks `meridian` into `~/.local/bin`. If that directory is not on your `$PATH`, the script will tell you what to add to your shell config.
 
-**Requirements:** Python 3.11+
+**Requirements:** Python 3.11+, `nmap` for the Port Scan panel (`brew install nmap`)
 
 ## Usage
 
@@ -116,13 +117,24 @@ The status bar shows `◉ WATCH` when active. A notification fires before each r
 | Key | Action |
 |---|---|
 | `1` / `2` / `3` / `4` / `5` | Switch tabs (Network / Web / Offensive / Brief / Exploit) |
+| `n` | Jump to next tab that has findings |
 | `t` | Cycle through all available themes |
 | `s` | Save plain-text report to `meridian_<target>_<timestamp>.txt` |
 | `j` | Save JSON report to `meridian_<target>_<timestamp>.json` |
 | `r` | Re-run all modules against the same target |
+| `?` | Show keybinding help overlay |
+| `p` | Paste nearest Exploit Reference command into the terminal input (Exploit tab) |
 | `q` | Quit |
 
-Click any finding to copy it to the clipboard. In the Exploit Reference panel, clicking a command line copies the bare command (the `$ ` prefix is stripped automatically).
+**Click any panel header** to copy all findings from that panel at once. Click any individual line to copy just that line. In the Exploit Reference panel, clicking a command line strips the `$ ` prefix automatically.
+
+### Status bar
+
+The status bar shows live scan progress — `8/23` modules done, turning `✓ 23/23` green when complete. If any module fails it shows `✗ N errors` in red.
+
+### Panel headers
+
+Each panel header shows the module status icon, finding count, and — once complete — the elapsed time (e.g. `✓ Shodan  (12)  3.2s`). This makes it easy to spot slow or timed-out modules.
 
 ## Themes
 
@@ -134,6 +146,7 @@ The **Exploit** tab (press `5`) is split into two panels:
 
 **Left — Exploit Reference** (auto-populates after recon finishes):
 - CVE → Metasploit `use exploit/...` command + Nuclei template + ExploitDB link
+- Open ports (nmap) → targeted attack commands per service: RDP spray, SMB/EternalBlue, SSH brute, Redis/Elasticsearch/MongoDB unauthenticated access, WinRM, SNMP enum, FTP anonymous login
 - Spoofable domain → `swaks` phishing command using real MX server from DNS panel
 - Open S3/GCP/Azure buckets → `aws s3 ls` + sync dump commands
 - Leaked plaintext passwords → `hydra` spray commands for SSH, web login, OWA/Exchange
@@ -144,10 +157,10 @@ The **Exploit** tab (press `5`) is split into two panels:
 - Type any command, press Enter — output streams live
 - `↑` / `↓` to cycle through command history (shell-style)
 - Type `clear` to wipe the terminal output
+- Press `p` while on the Exploit tab to paste the nearest command from the Reference panel directly into the terminal input
 - On failure: contextual fix suggestions (blocklist workarounds, missing tools, auth errors)
 - On command not found: install command shown immediately (`brew install ...`)
 - Click any output line to copy it
-- Switching to the Exploit tab auto-focuses the input — start typing immediately
 
 > All exploit commands are for use during **authorized engagements only**. You are solely responsible for what you execute.
 

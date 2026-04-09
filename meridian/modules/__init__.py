@@ -22,6 +22,7 @@ from .dnshistory import DNSHistoryModule
 from .buckets import BucketsModule
 from .cve import CVEModule
 from .exploits import ExploitsModule
+from .nmap_mod import NmapModule
 
 __all__ = [
     "Finding",
@@ -49,4 +50,5 @@ __all__ = [
     "BucketsModule",
     "CVEModule",
     "ExploitsModule",
+    "NmapModule",
 ]

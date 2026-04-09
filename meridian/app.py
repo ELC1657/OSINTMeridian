@@ -4,6 +4,7 @@ import asyncio
 import json
 import platform
 import re
+import time
 
 from rich.markup import escape
 import subprocess
@@ -18,6 +19,7 @@ from textual.containers import Horizontal, Vertical
 from textual.events import Click, Key
 from textual.reactive import reactive
 from textual.theme import Theme
+from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, RichLog, Static, TabbedContent, TabPane
 
 from .modules import (
@@ -36,6 +38,7 @@ from .modules import (
     GitHubModule,
     HunterModule,
     JSScanModule,
+    NmapModule,
     ParamsModule,
     PlaybookModule,
     ReconModule,
@@ -148,6 +151,8 @@ class ReconPanel(Vertical):
         self._pid = panel_id
         self._findings: list[str] = []
         self._all_lines: list[str] = []  # mirrors every write to RichLog for click-to-copy
+        self._start_time: float | None = None
+        self._elapsed: float | None = None
 
     def compose(self) -> ComposeResult:
         yield Static(self._render_header(), id=f"hdr-{self._pid}", classes="panel-header")
@@ -156,7 +161,8 @@ class ReconPanel(Vertical):
     def _render_header(self) -> str:
         icon = self._STATUS_ICONS.get(self.status, "○")
         count_str = f"  [dim]({self.count})[/dim]" if self.count > 0 else ""
-        return f"{icon} {self._title}{count_str}"
+        time_str  = f"  [dim]{self._elapsed:.1f}s[/dim]" if self._elapsed is not None and self.status in ("done", "error") else ""
+        return f"{icon} {self._title}{count_str}{time_str}"
 
     def watch_status(self, _: str) -> None:
         try:
@@ -179,12 +185,17 @@ class ReconPanel(Vertical):
         self._all_lines.append(re.sub(r"\[/?[^\]]*\]", "", text).strip())
 
     def set_running(self) -> None:
+        self._start_time = time.monotonic()
         self.status = "running"
 
     def set_done(self) -> None:
+        if self._start_time is not None:
+            self._elapsed = time.monotonic() - self._start_time
         self.status = "done"
 
     def set_error(self, msg: str) -> None:
+        if self._start_time is not None:
+            self._elapsed = time.monotonic() - self._start_time
         self.status = "error"
         self.write_line(f"[red]✗ {msg}[/red]")
 
@@ -193,13 +204,27 @@ class ReconPanel(Vertical):
         self._findings.clear()
         self._all_lines.clear()
         self.count = 0
+        self._start_time = None
+        self._elapsed = None
         self.status = "idle"
 
     def export_lines(self) -> list[str]:
         return list(self._findings)
 
     def on_click(self, event: Click) -> None:
-        # y=0 is the header bar, y=1+ is the log area
+        # y=0 is the header bar — click to copy ALL findings
+        if event.y == 0:
+            if self._findings:
+                ok = _copy_to_clipboard("\n".join(self._findings))
+                self.app.notify(
+                    f"Copied all {len(self._findings)} findings from {self._title}" if ok
+                    else "Clipboard unavailable",
+                    severity="information" if ok else "warning",
+                    timeout=2,
+                )
+            return
+
+        # y=1+ is the log area — click to copy individual line
         log = self.query_one(RichLog)
         line_idx = int(log.scroll_y) + max(0, event.y - 1)
         if 0 <= line_idx < len(self._all_lines):
@@ -477,12 +502,84 @@ class ExecTerminal(Vertical):
             self._write("")
 
 
+# ── Help overlay ─────────────────────────────────────────────────────────────
+
+class HelpScreen(ModalScreen[None]):
+    """Keybinding reference overlay — press ?, Esc, or q to close."""
+
+    DEFAULT_CSS = """
+    HelpScreen {
+        align: center middle;
+    }
+    HelpScreen Vertical {
+        width: 56;
+        height: auto;
+        background: $panel;
+        border: solid $primary;
+        padding: 1 2;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "dismiss", show=False),
+        Binding("q",      "dismiss", show=False),
+        Binding("?",      "dismiss", show=False),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static(
+                " [bold]MERIDIAN — KEYBINDINGS[/bold]\n"
+                " ─────────────────────────────────────────────\n"
+                "\n"
+                " [dim]Tabs[/dim]\n"
+                "   [bold cyan]1–5[/bold cyan]   Network / Web / Offensive / Brief / Exploit\n"
+                "\n"
+                " [dim]Actions[/dim]\n"
+                "   [bold cyan]r[/bold cyan]     Re-run all modules\n"
+                "   [bold cyan]s[/bold cyan]     Save plain-text report\n"
+                "   [bold cyan]j[/bold cyan]     Save JSON report\n"
+                "   [bold cyan]t[/bold cyan]     Cycle theme\n"
+                "\n"
+                " [dim]Exploit tab[/dim]\n"
+                "   [bold cyan]p[/bold cyan]     Send nearest command → terminal input\n"
+                "   [bold cyan]↑ ↓[/bold cyan]  Terminal command history\n"
+                "   [dim]clear[/dim]  Wipe terminal output\n"
+                "\n"
+                " [dim]General[/dim]\n"
+                "   [bold cyan]n[/bold cyan]     Jump to next tab with findings\n"
+                "   [bold cyan]?[/bold cyan]     This help screen\n"
+                "   [bold cyan]q[/bold cyan]     Quit\n"
+                "\n"
+                " [dim]Click panel header to copy all findings.[/dim]\n"
+                " [dim]Click any line to copy it to the clipboard.[/dim]\n"
+                " [dim]Press Esc / q / ? to close.[/dim]",
+                markup=True,
+            )
+
+
+# ── Tab navigation helpers ────────────────────────────────────────────────────
+
+_TAB_ORDER = ["tab-network", "tab-web", "tab-offensive", "tab-brief", "tab-exploit"]
+
+_TAB_PANELS: dict[str, set[str]] = {
+    "tab-network":   {"dns", "whois", "spoof", "shodan", "asn", "nmap", "dnshistory", "cve"},
+    "tab-web":       {"crtsh", "wayback", "urlscan", "buckets"},
+    "tab-offensive": {"virustotal", "github", "hunter", "takeover", "breach", "employees", "darkweb"},
+    "tab-brief":     {"brief", "playbook", "jsscan", "params"},
+    "tab-exploit":   {"exploits"},
+}
+
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 
 class MeridianApp(App[None]):
     """Meridian - Offensive Recon Aggregator"""
 
     TITLE = "MERIDIAN"
+
+    _done:   reactive[int] = reactive(0)
+    _errors: reactive[int] = reactive(0)
 
     CSS = """
     Screen {
@@ -596,11 +693,14 @@ class MeridianApp(App[None]):
         Binding("s", "save", "Save txt"),
         Binding("j", "save_json", "Save JSON"),
         Binding("t", "next_theme", "Theme"),
+        Binding("question_mark", "show_help", "Help"),
         Binding("1", "switch_tab('tab-network')",   "Network",   show=False),
         Binding("2", "switch_tab('tab-web')",        "Web",       show=False),
         Binding("3", "switch_tab('tab-offensive')",  "Offensive", show=False),
         Binding("4", "switch_tab('tab-brief')",      "Brief",     show=False),
         Binding("5", "switch_tab('tab-exploit')",    "Exploit",   show=False),
+        Binding("p", "paste_exploit",                "Paste cmd", show=False),
+        Binding("n", "next_finding_tab",             "Next tab",  show=False),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
 
@@ -640,6 +740,7 @@ class MeridianApp(App[None]):
             (ParamsModule(config),     "params"),
             (DNSHistoryModule(config), "dnshistory"),
             (BucketsModule(config),    "buckets"),
+            (NmapModule(config),       "nmap"),
         ]
         # Modules that read from other panels — appended last
         self._module_map.append(
@@ -655,14 +756,37 @@ class MeridianApp(App[None]):
             (PlaybookModule(config, self._collect_panel_data), "playbook")
         )
 
+    def _build_status(self) -> str:
+        total = len(self._module_map)
+        done  = self._done
+        errs  = self._errors
+        parts: list[str] = [f"[dim]>[/dim] [bold]{escape(self.target)}[/bold]"]
+        if self._watch_mode:
+            parts.append("  [yellow]◉ WATCH[/yellow]")
+        if done < total:
+            parts.append(f"  [dim]{done}/{total}[/dim]")
+        else:
+            parts.append(f"  [green]✓ {total}/{total}[/green]")
+        if errs:
+            parts.append(f"  [red]✗ {errs} error{'s' if errs > 1 else ''}[/red]")
+        parts.append("  [dim]|  ? help  1 Network  2 Web  3 Offensive  4 Brief  5 Exploit[/dim]")
+        return "".join(parts)
+
+    def _refresh_status_bar(self) -> None:
+        try:
+            self.query_one("#status-bar", Static).update(self._build_status())
+        except Exception:
+            pass
+
+    def watch__done(self, _: int) -> None:
+        self._refresh_status_bar()
+
+    def watch__errors(self, _: int) -> None:
+        self._refresh_status_bar()
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield Static(
-            f"[dim]>[/dim] [bold]{self.target}[/bold]"
-            + ("  [yellow]◉ WATCH[/yellow]" if self._watch_mode else "")
-            + "  [dim]|[/dim]  [dim]1 Network  2 Web  3 Offensive  4 Brief  5 Exploit[/dim]",
-            id="status-bar",
-        )
+        yield Static(self._build_status(), id="status-bar")
 
         with TabbedContent(initial="tab-network"):
             with TabPane("Network", id="tab-network"):
@@ -675,6 +799,8 @@ class MeridianApp(App[None]):
                     with Vertical(classes="col"):
                         yield ReconPanel("Shodan",        "shodan")
                         yield ReconPanel("ASN / Ranges",  "asn")
+                    with Vertical(classes="col"):
+                        yield ReconPanel("Port Scan",       "nmap")
                     with Vertical(classes="col"):
                         yield ReconPanel("DNS History",     "dnshistory")
                         yield ReconPanel("CVE Correlation", "cve")
@@ -801,11 +927,16 @@ class MeridianApp(App[None]):
                         panel.write_finding(finding)
         except asyncio.CancelledError:
             panel.set_error("Cancelled")
+            self._errors += 1
+            self._done += 1
             raise
         except Exception as exc:
             panel.set_error(str(exc))
+            self._errors += 1
+            self._done += 1
             return
         panel.set_done()
+        self._done += 1
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
@@ -820,13 +951,61 @@ class MeridianApp(App[None]):
         self.query_one(TabbedContent).active = tab_id
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        if event.pane.id == "tab-exploit":
-            try:
-                self.query_one("#term-input", TermInput).focus()
-            except Exception:
-                pass
+        pass
+
+    def action_show_help(self) -> None:
+        self.push_screen(HelpScreen())
+
+    def action_paste_exploit(self) -> None:
+        """Copy the nearest exploit command from the reference panel into the terminal input."""
+        try:
+            tc = self.query_one(TabbedContent)
+            if tc.active != "tab-exploit":
+                self.notify("Switch to the Exploit tab first  (press 5)", timeout=2)
+                return
+            panel = self.query_one("#panel-exploits", ReconPanel)
+            log   = panel.query_one(RichLog)
+            lines = panel._all_lines
+            scroll_y = int(log.scroll_y)
+            cmd = None
+            # Search downward from scroll position, then upward
+            for idx in list(range(scroll_y, len(lines))) + list(range(scroll_y - 1, -1, -1)):
+                text = lines[idx].strip()
+                if text.startswith("$ "):
+                    cmd = text[2:]
+                    break
+            if cmd:
+                inp = self.query_one("#term-input", TermInput)
+                inp.value = cmd
+                inp.cursor_position = len(cmd)
+                inp.focus()
+                self.notify(f"Pasted: {cmd[:55]}{'…' if len(cmd) > 55 else ''}", timeout=2)
+            else:
+                self.notify("No command found in Exploit Reference", severity="warning", timeout=2)
+        except Exception:
+            pass
+
+    def action_next_finding_tab(self) -> None:
+        """Jump to the next tab that has at least one finding."""
+        tc = self.query_one(TabbedContent)
+        current = tc.active
+        try:
+            start = _TAB_ORDER.index(current)
+        except ValueError:
+            start = 0
+        for i in range(1, len(_TAB_ORDER) + 1):
+            tab_id = _TAB_ORDER[(start + i) % len(_TAB_ORDER)]
+            for pid in _TAB_PANELS.get(tab_id, set()):
+                try:
+                    if self.query_one(f"#panel-{pid}", ReconPanel).count > 0:
+                        tc.active = tab_id
+                        return
+                except Exception:
+                    pass
 
     def action_rerun(self) -> None:
+        self._done = 0
+        self._errors = 0
         for _, panel_id in self._module_map:
             panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
             panel.clear()
@@ -865,7 +1044,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.72.2",
+            "version": "0.73.0",
             "modules": {},
         }
 
