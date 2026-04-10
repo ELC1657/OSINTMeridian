@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 
 import click
@@ -7,6 +8,7 @@ from dotenv import load_dotenv
 
 from .app import MeridianApp
 from .config import load_config
+from .modules import TargetMode, resolve_target
 from .splash import run_fire_splash
 
 _DISCLAIMER = """
@@ -29,7 +31,19 @@ _DISCLAIMER = """
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.argument("target")
+@click.argument("target", required=False, default=None)
+# ── Target mode flags (mutually exclusive) ────────────────────────────────────
+@click.option("--domain",  "-d",  default=None, metavar="DOMAIN",
+              help="Target is a domain name (default when positional arg is used)")
+@click.option("--ip",      "-ip", default=None, metavar="IP",
+              help="Target is an IP address — runs DNS/WHOIS/Shodan/ASN/Nmap/VT")
+@click.option("--email",   "-e",  default=None, metavar="EMAIL",
+              help="Target is an email address — domain modules run on the domain part")
+@click.option("--org",     "-or", default=None, metavar="ORG",
+              help="Target is an organisation name — resolves to domain via Clearbit/DDG")
+@click.option("--person",  "-p",  default=None, metavar="NAME",
+              help="Target is a person name — GitHub, email permutations, Dehashed")
+# ── API keys ──────────────────────────────────────────────────────────────────
 @click.option("--shodan-key",      envvar="SHODAN_API_KEY",   default="", help="Shodan API key")
 @click.option("--vt-key",          envvar="VT_API_KEY",       default="", help="VirusTotal API key")
 @click.option("--github-token",    envvar="GITHUB_TOKEN",     default="", help="GitHub personal access token")
@@ -44,7 +58,12 @@ _DISCLAIMER = """
 @click.option("--authorized", "-y", is_flag=True, default=False,
               help="Skip authorization prompt (confirm you have written permission)")
 def main(
-    target: str,
+    target: str | None,
+    domain: str | None,
+    ip: str | None,
+    email: str | None,
+    org: str | None,
+    person: str | None,
     shodan_key: str,
     vt_key: str,
     github_token: str,
@@ -61,7 +80,16 @@ def main(
     """
     MERIDIAN - Offensive recon aggregator for authorized engagements.
 
-    TARGET can be a domain (example.com), IP address, or CIDR range.
+    Provide a target as a bare positional argument (domain mode) or use a
+    mode flag for explicit target types:
+
+    \b
+      meridian example.com                     # domain (default)
+      meridian -d example.com                  # domain (explicit)
+      meridian -ip 192.168.1.1                 # IP address
+      meridian -e user@example.com             # email address
+      meridian -or "Acme Corp"                 # organisation name
+      meridian -p "John Smith"                 # person name
 
     API keys are read from environment variables or a .env file:
 
@@ -86,10 +114,49 @@ def main(
     \b
       meridian example.com -y
     """
+    # ── Resolve target and mode ───────────────────────────────────────────────
+    mode_inputs = [
+        (domain, TargetMode.DOMAIN),
+        (ip,     TargetMode.IP),
+        (email,  TargetMode.EMAIL),
+        (org,    TargetMode.ORG),
+        (person, TargetMode.PERSON),
+    ]
+    active = [(val, mode) for val, mode in mode_inputs if val is not None]
+
+    if len(active) > 1:
+        flags = ", ".join(
+            f"--{m.value}" for _, m in active
+        )
+        raise click.UsageError(f"Only one mode flag may be specified at a time ({flags})")
+
+    if active:
+        raw_target, target_mode = active[0]
+    elif target:
+        raw_target, target_mode = target, TargetMode.DOMAIN
+    else:
+        raise click.UsageError(
+            "Provide a TARGET or use a mode flag: "
+            "-d/--domain, -ip/--ip, -e/--email, -or/--org, -p/--person"
+        )
+
+    # Resolve canonical form and domain hint (may do a network lookup for ORG/IP)
+    _, canonical, domain_hint = asyncio.run(resolve_target(target_mode, raw_target))
+
+    if target_mode == TargetMode.ORG and domain_hint is None:
+        click.echo(
+            f"\n  [warning] Could not auto-resolve a domain for org '{raw_target}'.\n"
+            "  Domain-oriented modules will use the org name as-is.\n"
+            "  Consider using -d to specify the domain directly.\n",
+            err=True,
+        )
+
+    display_target = canonical
+
     # ── Authorization check ───────────────────────────────────────────────────
     if not authorized:
         click.echo(_DISCLAIMER)
-        click.echo(f"  Target: {target}\n")
+        click.echo(f"  Target: {display_target}\n")
         try:
             answer = click.prompt(
                 "  Do you have explicit written authorization to test this target? [y/N]",
@@ -104,7 +171,7 @@ def main(
         click.echo()
 
     # ── Fire splash ───────────────────────────────────────────────────────────
-    run_fire_splash(target)
+    run_fire_splash(display_target)
 
     # ── Config ────────────────────────────────────────────────────────────────
     load_dotenv(env_file, override=False)
@@ -128,8 +195,10 @@ def main(
         config["apollo_api_key"] = apollo_key
 
     app = MeridianApp(
-        target=target,
+        target=canonical,
         config=config,
+        target_mode=target_mode,
+        domain_hint=domain_hint,
         watch_interval=interval if watch else None,
     )
     app.run()

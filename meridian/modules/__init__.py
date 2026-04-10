@@ -23,6 +23,8 @@ from .buckets import BucketsModule
 from .cve import CVEModule
 from .exploits import ExploitsModule
 from .nmap_mod import NmapModule
+from .person import PersonModule
+from .target import TargetMode, resolve_target
 
 __all__ = [
     "Finding",
@@ -51,4 +53,7 @@ __all__ = [
     "CVEModule",
     "ExploitsModule",
     "NmapModule",
+    "PersonModule",
+    "TargetMode",
+    "resolve_target",
 ]

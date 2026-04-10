@@ -40,10 +40,12 @@ from .modules import (
     JSScanModule,
     NmapModule,
     ParamsModule,
+    PersonModule,
     PlaybookModule,
     ReconModule,
     ShodanModule,
     SpoofModule,
+    TargetMode,
     TakeoverModule,
     URLScanModule,
     VirusTotalModule,
@@ -70,6 +72,20 @@ def _copy_to_clipboard(text: str) -> bool:
         return True
     except Exception:
         return False
+
+
+# ── Skip-module placeholder ───────────────────────────────────────────────────
+
+class _SkipModule(ReconModule):
+    """Placeholder for panels not applicable to the current target mode."""
+
+    def __init__(self, reason: str = "") -> None:
+        super().__init__({})
+        self._reason = reason
+
+    async def run(self, target: str):  # type: ignore[override]
+        note = f"─ Not run in {self._reason} mode ─" if self._reason else "─ Not applicable ─"
+        yield Finding("skip", f"[dim]{note}[/dim]", progress=True)
 
 
 # ── Custom themes ─────────────────────────────────────────────────────────────
@@ -551,6 +567,13 @@ class HelpScreen(ModalScreen[None]):
                 "   [bold cyan]?[/bold cyan]     This help screen\n"
                 "   [bold cyan]q[/bold cyan]     Quit\n"
                 "\n"
+                " [dim]Target modes[/dim]\n"
+                "   [bold cyan]-d[/bold cyan]    domain (default)    meridian -d example.com\n"
+                "   [bold cyan]-ip[/bold cyan]   IP address           meridian -ip 1.2.3.4\n"
+                "   [bold cyan]-e[/bold cyan]    email address        meridian -e user@example.com\n"
+                "   [bold cyan]-or[/bold cyan]   organisation name    meridian -or \"Acme Corp\"\n"
+                "   [bold cyan]-p[/bold cyan]    person name          meridian -p \"John Smith\"\n"
+                "\n"
                 " [dim]Click panel header to copy all findings.[/dim]\n"
                 " [dim]Click any line to copy it to the clipboard.[/dim]\n"
                 " [dim]Press Esc / q / ? to close.[/dim]",
@@ -708,59 +731,144 @@ class MeridianApp(App[None]):
         self,
         target: str,
         config: dict[str, str],
+        target_mode: TargetMode = TargetMode.DOMAIN,
+        domain_hint: str | None = None,
         watch_interval: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.target = target
         self.config = config
-        self._theme_idx   = 0
+        self._target_mode    = target_mode
+        self._domain_hint    = domain_hint
+        self._theme_idx      = 0
         self._watch_interval = watch_interval
         self._watch_mode     = watch_interval is not None
         self._watch_prev: dict[str, set[str]] = {}
         self._watch_count = 0
 
-        self._module_map: list[tuple[ReconModule, str]] = [
-            (DNSModule(config),        "dns"),
-            (WHOISModule(config),      "whois"),
-            (SpoofModule(config),      "spoof"),
-            (CrtShModule(config),      "crtsh"),
-            (WaybackModule(config),    "wayback"),
-            (URLScanModule(config),    "urlscan"),
-            (ShodanModule(config),     "shodan"),
-            (ASNModule(config),        "asn"),
-            (VirusTotalModule(config), "virustotal"),
-            (GitHubModule(config),     "github"),
-            (HunterModule(config),     "hunter"),
-            (EmployeesModule(config),  "employees"),
-            (TakeoverModule(config),   "takeover"),
-            (BreachModule(config),     "breach"),
-            (DarkWebModule(config),    "darkweb"),
-            (JSScanModule(config),     "jsscan"),
-            (ParamsModule(config),     "params"),
-            (DNSHistoryModule(config), "dnshistory"),
-            (BucketsModule(config),    "buckets"),
-            (NmapModule(config),       "nmap"),
+        # (module, panel_id, effective_target) — target may differ per module in EMAIL mode
+        self._module_map: list[tuple[ReconModule, str, str]] = self._build_module_map(
+            config, target, domain_hint, target_mode
+        )
+
+    def _build_module_map(
+        self,
+        config: dict[str, str],
+        canonical: str,
+        domain_hint: str | None,
+        mode: TargetMode,
+    ) -> list[tuple[ReconModule, str, str]]:
+        """Return the (module, panel_id, target) list for the given mode."""
+        dom = domain_hint or canonical  # domain used by domain-oriented modules
+
+        def skip(label: str = "") -> _SkipModule:
+            return _SkipModule(label or mode.value.upper())
+
+        if mode == TargetMode.PERSON:
+            return [
+                (PersonModule(config), "person", canonical),
+            ]
+
+        if mode == TargetMode.IP:
+            entries: list[tuple[ReconModule, str, str]] = [
+                (DNSModule(config),        "dns",        canonical),
+                (WHOISModule(config),      "whois",      canonical),
+                (SpoofModule(config),      "spoof",      canonical),
+                (skip(),                   "crtsh",      canonical),
+                (skip(),                   "wayback",    canonical),
+                (URLScanModule(config),    "urlscan",    canonical),
+                (ShodanModule(config),     "shodan",     canonical),
+                (ASNModule(config),        "asn",        canonical),
+                (VirusTotalModule(config), "virustotal", canonical),
+                (skip(),                   "github",     canonical),
+                (skip(),                   "hunter",     canonical),
+                (skip(),                   "employees",  canonical),
+                (skip(),                   "takeover",   canonical),
+                (skip(),                   "breach",     canonical),
+                (skip(),                   "darkweb",    canonical),
+                (skip(),                   "jsscan",     canonical),
+                (skip(),                   "params",     canonical),
+                (skip(),                   "dnshistory", canonical),
+                (skip(),                   "buckets",    canonical),
+                (NmapModule(config),       "nmap",       canonical),
+                (CVEModule(config, self._collect_panel_data),        "cve",      canonical),
+                (ExploitsModule(config, self._collect_panel_data),   "exploits", canonical),
+                (AttackBriefModule(config, self._collect_panel_data), "brief",   canonical),
+                (PlaybookModule(config, self._collect_panel_data),   "playbook", canonical),
+            ]
+            return entries
+
+        if mode == TargetMode.EMAIL:
+            email = canonical
+            return [
+                (DNSModule(config),        "dns",        dom),
+                (WHOISModule(config),      "whois",      dom),
+                (SpoofModule(config),      "spoof",      dom),
+                (CrtShModule(config),      "crtsh",      dom),
+                (WaybackModule(config),    "wayback",    dom),
+                (URLScanModule(config),    "urlscan",    dom),
+                (ShodanModule(config),     "shodan",     dom),
+                (ASNModule(config),        "asn",        dom),
+                (VirusTotalModule(config), "virustotal", dom),
+                (GitHubModule(config),     "github",     dom),
+                (HunterModule(config),     "hunter",     email),    # email target
+                (skip("EMAIL"),            "employees",  dom),
+                (TakeoverModule(config),   "takeover",   dom),
+                (BreachModule(config),     "breach",     email),    # email target
+                (DarkWebModule(config),    "darkweb",    email),    # email target
+                (JSScanModule(config),     "jsscan",     dom),
+                (ParamsModule(config),     "params",     dom),
+                (DNSHistoryModule(config), "dnshistory", dom),
+                (BucketsModule(config),    "buckets",    dom),
+                (NmapModule(config),       "nmap",       dom),
+                (CVEModule(config, self._collect_panel_data),        "cve",      dom),
+                (ExploitsModule(config, self._collect_panel_data),   "exploits", dom),
+                (AttackBriefModule(config, self._collect_panel_data), "brief",   dom),
+                (PlaybookModule(config, self._collect_panel_data),   "playbook", dom),
+            ]
+
+        # DOMAIN or ORG — all modules run on the resolved domain
+        return [
+            (DNSModule(config),        "dns",        dom),
+            (WHOISModule(config),      "whois",      dom),
+            (SpoofModule(config),      "spoof",      dom),
+            (CrtShModule(config),      "crtsh",      dom),
+            (WaybackModule(config),    "wayback",    dom),
+            (URLScanModule(config),    "urlscan",    dom),
+            (ShodanModule(config),     "shodan",     dom),
+            (ASNModule(config),        "asn",        dom),
+            (VirusTotalModule(config), "virustotal", dom),
+            (GitHubModule(config),     "github",     dom),
+            (HunterModule(config),     "hunter",     dom),
+            (EmployeesModule(config),  "employees",  dom),
+            (TakeoverModule(config),   "takeover",   dom),
+            (BreachModule(config),     "breach",     dom),
+            (DarkWebModule(config),    "darkweb",    dom),
+            (JSScanModule(config),     "jsscan",     dom),
+            (ParamsModule(config),     "params",     dom),
+            (DNSHistoryModule(config), "dnshistory", dom),
+            (BucketsModule(config),    "buckets",    dom),
+            (NmapModule(config),       "nmap",       dom),
+            (CVEModule(config, self._collect_panel_data),        "cve",      dom),
+            (ExploitsModule(config, self._collect_panel_data),   "exploits", dom),
+            (AttackBriefModule(config, self._collect_panel_data), "brief",   dom),
+            (PlaybookModule(config, self._collect_panel_data),   "playbook", dom),
         ]
-        # Modules that read from other panels — appended last
-        self._module_map.append(
-            (CVEModule(config, self._collect_panel_data), "cve")
-        )
-        self._module_map.append(
-            (ExploitsModule(config, self._collect_panel_data), "exploits")
-        )
-        self._module_map.append(
-            (AttackBriefModule(config, self._collect_panel_data), "brief")
-        )
-        self._module_map.append(
-            (PlaybookModule(config, self._collect_panel_data), "playbook")
-        )
 
     def _build_status(self) -> str:
         total = len(self._module_map)
         done  = self._done
         errs  = self._errors
         parts: list[str] = [f"[dim]>[/dim] [bold]{escape(self.target)}[/bold]"]
+
+        # Mode badge (hidden for plain DOMAIN mode)
+        if self._target_mode != TargetMode.DOMAIN:
+            label = self._target_mode.value.upper()
+            parts.append(f"  [bold magenta]{label}[/bold magenta]")
+            if self._domain_hint:
+                parts.append(f"  [dim]→  {escape(self._domain_hint)}[/dim]")
+
         if self._watch_mode:
             parts.append("  [yellow]◉ WATCH[/yellow]")
         if done < total:
@@ -769,7 +877,7 @@ class MeridianApp(App[None]):
             parts.append(f"  [green]✓ {total}/{total}[/green]")
         if errs:
             parts.append(f"  [red]✗ {errs} error{'s' if errs > 1 else ''}[/red]")
-        parts.append("  [dim]|  ? help  1 Network  2 Web  3 Offensive  4 Brief  5 Exploit[/dim]")
+        parts.append("  [dim]|  ? help  1-5 tabs[/dim]")
         return "".join(parts)
 
     def _refresh_status_bar(self) -> None:
@@ -787,6 +895,17 @@ class MeridianApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield Static(self._build_status(), id="status-bar")
+
+        if self._target_mode == TargetMode.PERSON:
+            with TabbedContent(initial="tab-person"):
+                with TabPane("Person Intel", id="tab-person"):
+                    with Horizontal(classes="tab-layout"):
+                        with Vertical(classes="col"):
+                            yield ReconPanel("Person Intel", "person")
+                        with Vertical(classes="col"):
+                            yield ExecTerminal()
+            yield Footer()
+            return
 
         with TabbedContent(initial="tab-network"):
             with TabPane("Network", id="tab-network"):
@@ -866,8 +985,8 @@ class MeridianApp(App[None]):
         self.theme = self._themes[0]
         self.title = f"MERIDIAN  >  {self.target}"
 
-        for module, panel_id in self._module_map:
-            self._run_module(module, panel_id)
+        for module, panel_id, mod_target in self._module_map:
+            self._run_module(module, panel_id, mod_target)
         if self._watch_mode:
             self._watch_loop()
 
@@ -880,7 +999,7 @@ class MeridianApp(App[None]):
             self._watch_count += 1
             # Snapshot current findings before clearing
             self._watch_prev = {}
-            for _, panel_id in self._module_map:
+            for _, panel_id, _ in self._module_map:
                 try:
                     panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
                     self._watch_prev[panel_id] = set(panel.export_lines())
@@ -895,7 +1014,7 @@ class MeridianApp(App[None]):
     def _collect_panel_data(self) -> dict[str, dict]:
         """Read all panel findings — called by AttackBriefModule to synthesize."""
         result: dict[str, dict] = {}
-        for _, panel_id in self._module_map:
+        for _, panel_id, _ in self._module_map:
             if panel_id == "brief":
                 continue
             try:
@@ -912,12 +1031,12 @@ class MeridianApp(App[None]):
     # ── Workers ───────────────────────────────────────────────────────────────
 
     @work(exclusive=False, thread=False)
-    async def _run_module(self, module: ReconModule, panel_id: str) -> None:
+    async def _run_module(self, module: ReconModule, panel_id: str, target: str) -> None:
         panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
         panel.set_running()
         prev = self._watch_prev.get(panel_id, set())
         try:
-            async for finding in module.run(self.target):
+            async for finding in module.run(target):
                 if finding.progress:
                     panel.write_line(finding.line)
                 else:
@@ -988,6 +1107,9 @@ class MeridianApp(App[None]):
 
     def action_next_finding_tab(self) -> None:
         """Jump to the next tab that has at least one finding."""
+        if self._target_mode == TargetMode.PERSON:
+            return  # only one tab in PERSON mode
+
         tc = self.query_one(TabbedContent)
         current = tc.active
         try:
@@ -1007,11 +1129,14 @@ class MeridianApp(App[None]):
     def action_rerun(self) -> None:
         self._done = 0
         self._errors = 0
-        for _, panel_id in self._module_map:
-            panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
-            panel.clear()
-        for module, panel_id in self._module_map:
-            self._run_module(module, panel_id)
+        for _, panel_id, _ in self._module_map:
+            try:
+                panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
+                panel.clear()
+            except Exception:
+                pass
+        for module, panel_id, mod_target in self._module_map:
+            self._run_module(module, panel_id, mod_target)
         self.notify("Re-running all modules...")
 
     def action_save(self) -> None:
@@ -1027,12 +1152,15 @@ class MeridianApp(App[None]):
             "",
         ]
 
-        for _, panel_id in self._module_map:
-            panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
-            lines.append(f"\n{'-' * 60}")
-            lines.append(f"[{panel._title}]  ({panel.count} findings)")
-            lines.append("-" * 60)
-            lines.extend(panel.export_lines())
+        for _, panel_id, _ in self._module_map:
+            try:
+                panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
+                lines.append(f"\n{'-' * 60}")
+                lines.append(f"[{panel._title}]  ({panel.count} findings)")
+                lines.append("-" * 60)
+                lines.extend(panel.export_lines())
+            except Exception:
+                pass
 
         out.write_text("\n".join(lines))
         self.notify(f"Saved: {out}", severity="information")
@@ -1045,17 +1173,20 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.75.0",
+            "version": "0.80.0",
             "modules": {},
         }
 
-        for _, panel_id in self._module_map:
-            panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
-            payload["modules"][panel_id] = {
-                "name": panel._title,
-                "count": panel.count,
-                "findings": panel.export_lines(),
-            }
+        for _, panel_id, _ in self._module_map:
+            try:
+                panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
+                payload["modules"][panel_id] = {
+                    "name": panel._title,
+                    "count": panel.count,
+                    "findings": panel.export_lines(),
+                }
+            except Exception:
+                pass
 
         out.write_text(json.dumps(payload, indent=2))
         self.notify(f"Saved: {out}", severity="information")
