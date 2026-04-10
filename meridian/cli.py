@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from .app import MeridianApp
 from .config import load_config
+from .splash import run_fire_splash
 
 _DISCLAIMER = """
   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -101,6 +102,9 @@ def main(
             click.echo("\n  Aborted. Obtain written authorization before proceeding.\n")
             sys.exit(1)
         click.echo()
+
+    # ── Fire splash ───────────────────────────────────────────────────────────
+    run_fire_splash(target)
 
     # ── Config ────────────────────────────────────────────────────────────────
     load_dotenv(env_file, override=False)

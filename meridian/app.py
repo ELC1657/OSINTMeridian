@@ -865,6 +865,7 @@ class MeridianApp(App[None]):
 
         self.theme = self._themes[0]
         self.title = f"MERIDIAN  >  {self.target}"
+
         for module, panel_id in self._module_map:
             self._run_module(module, panel_id)
         if self._watch_mode:
@@ -1044,7 +1045,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.73.0",
+            "version": "0.75.0",
             "modules": {},
         }
 

@@ -1,4 +1,4 @@
-# Meridian `v0.73.0`
+# Meridian `v0.75.0`
 
 > ⚠️ **LEGAL DISCLAIMER — READ BEFORE USE**
 >
@@ -78,7 +78,7 @@ cd OSINTMeridian
 
 The script creates a `.venv`, installs all dependencies, and symlinks `meridian` into `~/.local/bin`. If that directory is not on your `$PATH`, the script will tell you what to add to your shell config.
 
-**Requirements:** Python 3.11+, `nmap` for the Port Scan panel (`brew install nmap`)
+**Requirements:** Python 3.11+, `nmap` for the Port Scan panel (`brew install nmap`), `pyfiglet` (installed automatically via pip)
 
 ## Usage
 
