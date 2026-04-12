@@ -24,6 +24,7 @@ from .cve import CVEModule
 from .exploits import ExploitsModule
 from .nmap_mod import NmapModule
 from .person import PersonModule
+from .email_mod import EmailIntelModule
 from .target import TargetMode, resolve_target
 
 __all__ = [
@@ -54,6 +55,7 @@ __all__ = [
     "ExploitsModule",
     "NmapModule",
     "PersonModule",
+    "EmailIntelModule",
     "TargetMode",
     "resolve_target",
 ]

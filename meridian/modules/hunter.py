@@ -20,8 +20,17 @@ class HunterModule(ReconModule):
             yield Finding("hunter", "[dim]Free key at https://hunter.io/users/sign_up[/dim]")
             return
 
-        domain = _normalize(target)
+        is_email = "@" in target and not target.startswith("@")
+        email    = target.strip() if is_email else ""
+        domain   = target.split("@")[-1] if is_email else _normalize(target)
 
+        # ── Email verifier (only when a specific address was passed) ──────────
+        if is_email:
+            async for f in self._verify_email(email, api_key):
+                yield f
+            yield Finding("hunter", "")
+
+        # ── Domain search ─────────────────────────────────────────────────────
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 r = await client.get(
@@ -97,3 +106,62 @@ class HunterModule(ReconModule):
                 "hunter",
                 f"[{conf_color}]{confidence:3d}%[/{conf_color}]  [cyan]{address}[/cyan]{name_str}{role_str}{dept_str}",
             )
+
+    async def _verify_email(self, email: str, api_key: str) -> AsyncIterator[Finding]:
+        from rich.markup import escape as _escape
+        yield Finding("hunter", "[bold cyan]── Email Verifier ──[/bold cyan]")
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                r = await client.get(
+                    f"{_BASE}/email-verifier",
+                    params={"email": email, "api_key": api_key},
+                )
+        except Exception as exc:
+            yield Finding("hunter", f"  [red]Error: {_escape(str(exc))}[/red]")
+            return
+
+        if r.status_code == 401:
+            yield Finding("hunter", "  [red]Invalid API key[/red]")
+            return
+        if r.status_code == 429:
+            yield Finding("hunter", "  [yellow]Rate limit hit[/yellow]")
+            return
+        if r.status_code not in (200, 202):
+            yield Finding("hunter", f"  [red]HTTP {r.status_code}[/red]")
+            return
+
+        data = (r.json().get("data") or {})
+        status    = data.get("status", "unknown")
+        score     = data.get("score", 0)
+        result    = data.get("result", "")
+        mx_host   = data.get("mx_host", "")
+        disposable = data.get("disposable", False)
+        webmail    = data.get("webmail", False)
+        gibberish  = data.get("gibberish", False)
+        regexp     = data.get("regexp", False)
+
+        status_color = {
+            "valid":      "green",
+            "invalid":    "red",
+            "accept_all": "yellow",
+            "webmail":    "cyan",
+            "disposable": "yellow",
+            "unknown":    "dim",
+        }.get(status, "dim")
+
+        yield Finding("hunter", f"  Status: [{status_color}]{_escape(status.upper())}[/{status_color}]  Score: [bold]{score}[/bold]")
+        if result:
+            yield Finding("hunter", f"  Result: [dim]{_escape(result)}[/dim]")
+        if mx_host:
+            yield Finding("hunter", f"  MX:     [dim]{_escape(mx_host)}[/dim]")
+        flags = []
+        if disposable:
+            flags.append("[yellow]disposable[/yellow]")
+        if webmail:
+            flags.append("[cyan]webmail[/cyan]")
+        if gibberish:
+            flags.append("[red]gibberish[/red]")
+        if not regexp:
+            flags.append("[red]invalid format[/red]")
+        if flags:
+            yield Finding("hunter", f"  Flags: {' · '.join(flags)}")

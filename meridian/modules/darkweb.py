@@ -32,7 +32,11 @@ class DarkWebModule(ReconModule):
     key_env = "INTELX_API_KEY / RAPIDAPI_KEY / DEHASHED"
 
     async def run(self, target: str) -> AsyncIterator[Finding]:
-        domain = _normalize(target)
+        is_email = "@" in target and not target.startswith("@")
+        # For IntelX and BreachDirectory, search the raw target (email or domain both work)
+        search_term = target.strip() if is_email else _normalize(target)
+        # For Dehashed, we need the correct field qualifier
+        dehashed_query = f"email:{search_term}" if is_email else f"domain:{_normalize(target)}"
 
         intelx_key     = self.get_key("intelx_api_key")
         rapidapi_key   = self.get_key("rapidapi_key")
@@ -51,19 +55,19 @@ class DarkWebModule(ReconModule):
 
         if intelx_key:
             yield Finding("darkweb", "[bold cyan]━━━ IntelligenceX ━━━[/bold cyan]")
-            async for f in _intelx(domain, intelx_key):
+            async for f in _intelx(search_term, intelx_key):
                 yield f
             yield Finding("darkweb", "")
 
         if rapidapi_key:
             yield Finding("darkweb", "[bold cyan]━━━ BreachDirectory ━━━[/bold cyan]")
-            async for f in _breachdir(domain, rapidapi_key):
+            async for f in _breachdir(search_term, rapidapi_key):
                 yield f
             yield Finding("darkweb", "")
 
         if dehashed_email and dehashed_key:
             yield Finding("darkweb", "[bold cyan]━━━ Dehashed ━━━[/bold cyan]")
-            async for f in _dehashed(domain, dehashed_key):
+            async for f in _dehashed(dehashed_query, dehashed_key):
                 yield f
 
 
@@ -208,13 +212,13 @@ def _str(val) -> str:
 
 # ── Dehashed ───────────────────────────────────────────────────────────────────
 
-async def _dehashed(domain: str, api_key: str) -> AsyncIterator[Finding]:
+async def _dehashed(query: str, api_key: str) -> AsyncIterator[Finding]:
     headers = {
         "Dehashed-Api-Key": api_key,
         "Accept":           "application/json",
     }
     payload = {
-        "query": f"domain:{domain}",
+        "query": query,
         "size":  20,
         "page":  1,
     }

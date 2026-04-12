@@ -16,7 +16,11 @@ class BreachModule(ReconModule):
     panel_id = "breach"
 
     async def run(self, target: str) -> AsyncIterator[Finding]:
-        domain = _normalize(target)
+        # If an email address was passed, use the domain portion for HIBP
+        if "@" in target:
+            domain = target.split("@")[-1].strip().lower()
+        else:
+            domain = _normalize(target)
         base = domain.split(".")[0].lower()  # "twitter" from "twitter.com"
 
         try:
