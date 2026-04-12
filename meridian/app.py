@@ -32,6 +32,7 @@ from .modules import (
     DarkWebModule,
     DNSHistoryModule,
     DNSModule,
+    EmailIntelModule,
     EmployeesModule,
     ExploitsModule,
     Finding,
@@ -588,7 +589,7 @@ _TAB_ORDER = ["tab-network", "tab-web", "tab-offensive", "tab-brief", "tab-explo
 _TAB_PANELS: dict[str, set[str]] = {
     "tab-network":   {"dns", "whois", "spoof", "shodan", "asn", "nmap", "dnshistory", "cve"},
     "tab-web":       {"crtsh", "wayback", "urlscan", "buckets"},
-    "tab-offensive": {"virustotal", "github", "hunter", "takeover", "breach", "employees", "darkweb"},
+    "tab-offensive": {"virustotal", "github", "hunter", "takeover", "breach", "employees", "darkweb", "email_intel"},
     "tab-brief":     {"brief", "playbook", "jsscan", "params"},
     "tab-exploit":   {"exploits"},
 }
@@ -772,88 +773,91 @@ class MeridianApp(App[None]):
 
         if mode == TargetMode.IP:
             entries: list[tuple[ReconModule, str, str]] = [
-                (DNSModule(config),        "dns",        canonical),
-                (WHOISModule(config),      "whois",      canonical),
-                (SpoofModule(config),      "spoof",      canonical),
-                (skip(),                   "crtsh",      canonical),
-                (skip(),                   "wayback",    canonical),
-                (URLScanModule(config),    "urlscan",    canonical),
-                (ShodanModule(config),     "shodan",     canonical),
-                (ASNModule(config),        "asn",        canonical),
-                (VirusTotalModule(config), "virustotal", canonical),
-                (skip(),                   "github",     canonical),
-                (skip(),                   "hunter",     canonical),
-                (skip(),                   "employees",  canonical),
-                (skip(),                   "takeover",   canonical),
-                (skip(),                   "breach",     canonical),
-                (skip(),                   "darkweb",    canonical),
-                (skip(),                   "jsscan",     canonical),
-                (skip(),                   "params",     canonical),
-                (skip(),                   "dnshistory", canonical),
-                (skip(),                   "buckets",    canonical),
-                (NmapModule(config),       "nmap",       canonical),
-                (CVEModule(config, self._collect_panel_data),        "cve",      canonical),
-                (ExploitsModule(config, self._collect_panel_data),   "exploits", canonical),
-                (AttackBriefModule(config, self._collect_panel_data), "brief",   canonical),
-                (PlaybookModule(config, self._collect_panel_data),   "playbook", canonical),
+                (DNSModule(config),        "dns",          canonical),
+                (WHOISModule(config),      "whois",        canonical),
+                (SpoofModule(config),      "spoof",        canonical),
+                (skip(),                   "crtsh",        canonical),
+                (skip(),                   "wayback",      canonical),
+                (URLScanModule(config),    "urlscan",      canonical),
+                (ShodanModule(config),     "shodan",       canonical),
+                (ASNModule(config),        "asn",          canonical),
+                (VirusTotalModule(config), "virustotal",   canonical),
+                (skip(),                   "github",       canonical),
+                (skip(),                   "hunter",       canonical),
+                (skip(),                   "email_intel",  canonical),
+                (skip(),                   "employees",    canonical),
+                (skip(),                   "takeover",     canonical),
+                (skip(),                   "breach",       canonical),
+                (skip(),                   "darkweb",      canonical),
+                (skip(),                   "jsscan",       canonical),
+                (skip(),                   "params",       canonical),
+                (skip(),                   "dnshistory",   canonical),
+                (skip(),                   "buckets",      canonical),
+                (NmapModule(config),       "nmap",         canonical),
+                (CVEModule(config, self._collect_panel_data),         "cve",      canonical),
+                (ExploitsModule(config, self._collect_panel_data),    "exploits", canonical),
+                (AttackBriefModule(config, self._collect_panel_data), "brief",    canonical),
+                (PlaybookModule(config, self._collect_panel_data),    "playbook", canonical),
             ]
             return entries
 
         if mode == TargetMode.EMAIL:
             email = canonical
             return [
-                (DNSModule(config),        "dns",        dom),
-                (WHOISModule(config),      "whois",      dom),
-                (SpoofModule(config),      "spoof",      dom),
-                (CrtShModule(config),      "crtsh",      dom),
-                (WaybackModule(config),    "wayback",    dom),
-                (URLScanModule(config),    "urlscan",    dom),
-                (ShodanModule(config),     "shodan",     dom),
-                (ASNModule(config),        "asn",        dom),
-                (VirusTotalModule(config), "virustotal", dom),
-                (GitHubModule(config),     "github",     dom),
-                (HunterModule(config),     "hunter",     email),    # email target
-                (skip("EMAIL"),            "employees",  dom),
-                (TakeoverModule(config),   "takeover",   dom),
-                (BreachModule(config),     "breach",     email),    # email target
-                (DarkWebModule(config),    "darkweb",    email),    # email target
-                (JSScanModule(config),     "jsscan",     dom),
-                (ParamsModule(config),     "params",     dom),
-                (DNSHistoryModule(config), "dnshistory", dom),
-                (BucketsModule(config),    "buckets",    dom),
-                (NmapModule(config),       "nmap",       dom),
-                (CVEModule(config, self._collect_panel_data),        "cve",      dom),
-                (ExploitsModule(config, self._collect_panel_data),   "exploits", dom),
-                (AttackBriefModule(config, self._collect_panel_data), "brief",   dom),
-                (PlaybookModule(config, self._collect_panel_data),   "playbook", dom),
+                (DNSModule(config),           "dns",          dom),
+                (WHOISModule(config),         "whois",        dom),
+                (SpoofModule(config),         "spoof",        dom),
+                (CrtShModule(config),         "crtsh",        dom),
+                (WaybackModule(config),       "wayback",      dom),
+                (URLScanModule(config),       "urlscan",      dom),
+                (ShodanModule(config),        "shodan",       dom),
+                (ASNModule(config),           "asn",          dom),
+                (VirusTotalModule(config),    "virustotal",   dom),
+                (GitHubModule(config),        "github",       dom),
+                (HunterModule(config),        "hunter",       email),   # verifier + domain search
+                (EmailIntelModule(config),    "email_intel",  email),   # emailrep + gravatar
+                (skip("EMAIL"),               "employees",    dom),
+                (TakeoverModule(config),      "takeover",     dom),
+                (BreachModule(config),        "breach",       email),   # domain extracted internally
+                (DarkWebModule(config),       "darkweb",      email),   # full email to all sources
+                (JSScanModule(config),        "jsscan",       dom),
+                (ParamsModule(config),        "params",       dom),
+                (DNSHistoryModule(config),    "dnshistory",   dom),
+                (BucketsModule(config),       "buckets",      dom),
+                (NmapModule(config),          "nmap",         dom),
+                (CVEModule(config, self._collect_panel_data),         "cve",      dom),
+                (ExploitsModule(config, self._collect_panel_data),    "exploits", dom),
+                (AttackBriefModule(config, self._collect_panel_data), "brief",    dom),
+                (PlaybookModule(config, self._collect_panel_data),    "playbook", dom),
             ]
 
         # DOMAIN or ORG — all modules run on the resolved domain
         return [
-            (DNSModule(config),        "dns",        dom),
-            (WHOISModule(config),      "whois",      dom),
-            (SpoofModule(config),      "spoof",      dom),
-            (CrtShModule(config),      "crtsh",      dom),
-            (WaybackModule(config),    "wayback",    dom),
-            (URLScanModule(config),    "urlscan",    dom),
-            (ShodanModule(config),     "shodan",     dom),
-            (ASNModule(config),        "asn",        dom),
-            (VirusTotalModule(config), "virustotal", dom),
-            (GitHubModule(config),     "github",     dom),
-            (HunterModule(config),     "hunter",     dom),
-            (EmployeesModule(config),  "employees",  dom),
-            (TakeoverModule(config),   "takeover",   dom),
-            (BreachModule(config),     "breach",     dom),
-            (DarkWebModule(config),    "darkweb",    dom),
-            (JSScanModule(config),     "jsscan",     dom),
-            (ParamsModule(config),     "params",     dom),
-            (DNSHistoryModule(config), "dnshistory", dom),
-            (BucketsModule(config),    "buckets",    dom),
-            (NmapModule(config),       "nmap",       dom),
-            (CVEModule(config, self._collect_panel_data),        "cve",      dom),
-            (ExploitsModule(config, self._collect_panel_data),   "exploits", dom),
-            (AttackBriefModule(config, self._collect_panel_data), "brief",   dom),
-            (PlaybookModule(config, self._collect_panel_data),   "playbook", dom),
+            (DNSModule(config),           "dns",         dom),
+            (WHOISModule(config),         "whois",       dom),
+            (SpoofModule(config),         "spoof",       dom),
+            (CrtShModule(config),         "crtsh",       dom),
+            (WaybackModule(config),       "wayback",     dom),
+            (URLScanModule(config),       "urlscan",     dom),
+            (ShodanModule(config),        "shodan",      dom),
+            (ASNModule(config),           "asn",         dom),
+            (VirusTotalModule(config),    "virustotal",  dom),
+            (GitHubModule(config),        "github",      dom),
+            (HunterModule(config),        "hunter",      dom),
+            (skip(),                      "email_intel", dom),
+            (EmployeesModule(config),     "employees",   dom),
+            (TakeoverModule(config),      "takeover",    dom),
+            (BreachModule(config),        "breach",      dom),
+            (DarkWebModule(config),       "darkweb",     dom),
+            (JSScanModule(config),        "jsscan",      dom),
+            (ParamsModule(config),        "params",      dom),
+            (DNSHistoryModule(config),    "dnshistory",  dom),
+            (BucketsModule(config),       "buckets",     dom),
+            (NmapModule(config),          "nmap",        dom),
+            (CVEModule(config, self._collect_panel_data),         "cve",      dom),
+            (ExploitsModule(config, self._collect_panel_data),    "exploits", dom),
+            (AttackBriefModule(config, self._collect_panel_data), "brief",    dom),
+            (PlaybookModule(config, self._collect_panel_data),    "playbook", dom),
         ]
 
     def _build_status(self) -> str:
@@ -948,6 +952,7 @@ class MeridianApp(App[None]):
                         yield ReconPanel("Employee Targets", "employees")
                     with Vertical(classes="col"):
                         yield ReconPanel("Dark Web",         "darkweb")
+                        yield ReconPanel("Email Intel",      "email_intel")
 
             with TabPane("Brief", id="tab-brief"):
                 with Horizontal(classes="tab-layout"):
@@ -1173,7 +1178,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.80.0",
+            "version": "0.82.0",
             "modules": {},
         }
 

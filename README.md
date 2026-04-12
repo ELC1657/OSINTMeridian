@@ -1,10 +1,10 @@
-# Meridian `v0.80.0`
+# Meridian `v0.82.0`
 
 > ⚠️ **LEGAL DISCLAIMER — READ BEFORE USE**
 >
 > Meridian is intended for **authorized penetration testing, bug bounty programs, CTF competitions, and security research on systems you own or have explicit written permission to assess**. Running this tool against any system without explicit written authorization is illegal. The developer accepts no liability for misuse or damage. By using Meridian you confirm you have proper authorization. See [DISCLAIMER.md](DISCLAIMER.md) for full terms.
 
-Offensive recon aggregator for penetration testers. Type a target, get results from 22 sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching. Includes an integrated exploit reference and execution terminal.
+Offensive recon aggregator for penetration testers. Type a target, get results from multiple sources simultaneously in a live tabbed terminal UI — no browser tabs, no copy-paste, no context switching. Includes an integrated exploit reference and execution terminal.
 
 Five target modes let you pivot from domains to IPs, email addresses, organisations, and named individuals without changing tools.
 
@@ -37,7 +37,7 @@ Network  Web  Offensive  Brief  Exploit
 |---|---|---|
 | Network | `1` | DNS Records, WHOIS, Spoofability, Shodan, ASN / IP Ranges, Port Scan, DNS History, CVE Correlation |
 | Web | `2` | Subdomains (crt.sh), Wayback Machine, URLScan.io, Cloud Buckets |
-| Offensive | `3` | VirusTotal, GitHub, Hunter.io, Employee Targets, Takeover, Breach Intel, Dark Web |
+| Offensive | `3` | VirusTotal, GitHub, Hunter.io, Employee Targets, Takeover, Breach Intel, Dark Web, Email Intel |
 | Brief | `4` | Attack Brief, Playbook, JS Secrets, URL Params |
 | Exploit | `5` | Exploit Reference, Execution Terminal |
 
@@ -56,11 +56,12 @@ Network  Web  Offensive  Brief  Exploit
 | ASN / IP Ranges | BGPView - ASN number, org name, all owned IPv4/IPv6 prefixes | - |
 | VirusTotal | Detection stats, reputation, historical IPs, subdomains | `VT_API_KEY` |
 | GitHub | 10 dork queries - passwords, secrets, `.env`, private keys, configs | `GITHUB_TOKEN` |
-| Hunter.io | Email discovery, org info, email pattern, confidence scores | `HUNTER_API_KEY` |
+| Hunter.io | Email discovery, org info, email pattern, confidence scores. In email mode: also runs the email verifier endpoint (deliverability, MX, disposable/webmail flags). | `HUNTER_API_KEY` |
 | Employee Targets | Hunter.io + Apollo.io + GitHub org members, ranked by attack value | `HUNTER_API_KEY` / `APOLLO_API_KEY` / `GITHUB_TOKEN` |
 | Takeover | Checks all crt.sh subdomains for dangling CNAMEs across 20 known services | - |
-| Breach Intel | HIBP public breach list - domain + name match, pwn counts, data types | - |
-| Dark Web | IntelligenceX, BreachDirectory, Dehashed — leaked credentials, dark web mentions | `INTELX_API_KEY` / `RAPIDAPI_KEY` / `DEHASHED_API_KEY` |
+| Breach Intel | HIBP public breach list - domain + name match, pwn counts, data types. In email mode: searches the extracted domain. | - |
+| Dark Web | IntelligenceX, BreachDirectory, Dehashed — leaked credentials, dark web mentions. In email mode: all three sources query the full email address directly. | `INTELX_API_KEY` / `RAPIDAPI_KEY` / `DEHASHED_API_KEY` |
+| Email Intel | EmailRep.io reputation + breach flags + social profiles; Gravatar profile, linked accounts, bio, location. Active in email mode only. | - |
 | JS Secrets | Fetches archived JS files, scans for AWS keys, tokens, JWTs, passwords | - |
 | URL Params | Mines 8,000 archived URLs for SSRF candidates, injection params, sensitive paths | - |
 | DNS History | SecurityTrails — all historical A, MX, NS records with date ranges | `SECTRAILS_API_KEY` |
@@ -69,7 +70,7 @@ Network  Web  Offensive  Brief  Exploit
 | Exploit Reference | Auto-generated exploit commands from CVEs, spoofability, leaked creds, SSRF, buckets | - |
 | Attack Brief | Waits for all modules, synthesizes findings into CRITICAL / HIGH / MEDIUM / INFO | - |
 | Playbook | Generates a numbered, tool-ready attack plan based on what was actually found | - |
-| Person Intel | GitHub profiles, email permutations, Dehashed name search, code mentions | `GITHUB_TOKEN` / `DEHASHED_API_KEY` |
+| Person Intel | GitHub profiles, email permutations, Dehashed name search, code mentions. Active in person mode only. | `GITHUB_TOKEN` / `DEHASHED_API_KEY` |
 
 ## Install
 
@@ -110,9 +111,9 @@ Meridian supports five target types, each loading only the modules relevant to t
 
 | Flag | Mode | What runs |
 |---|---|---|
-| *(positional)* or `-d` / `--domain` | Domain | All 22 modules |
+| *(positional)* or `-d` / `--domain` | Domain | All modules |
 | `-ip` / `--ip` | IP address | DNS, WHOIS, Shodan, ASN, Nmap, VirusTotal, URLScan + synthesis |
-| `-e` / `--email` | Email address | All domain modules run on the domain part; Hunter, Breach, Dark Web get the full email |
+| `-e` / `--email` | Email address | All domain modules on the domain part; Hunter verifier + EmailRep + Gravatar + Breach + Dark Web on the full email |
 | `-or` / `--org` | Organisation | Domain resolved via Clearbit → DuckDuckGo; all domain modules run on that domain |
 | `-p` / `--person` | Person name | GitHub profiles, email permutations, Dehashed name search, GitHub code mentions |
 
@@ -128,9 +129,9 @@ meridian -p "John Smith"               # person name
 The status bar shows the active mode and the resolved domain hint when applicable:
 
 ```
-> user@example.com  EMAIL  →  example.com   8/24
-> Acme Corp         ORG    →  acme.com      ✓ 24/24
-> 192.168.1.1       IP                      ✓ 24/24
+> user@example.com  EMAIL  →  example.com   8/25
+> Acme Corp         ORG    →  acme.com      ✓ 25/25
+> 192.168.1.1       IP                      ✓ 25/25
 ```
 
 Only one mode flag may be used at a time. They are mutually exclusive.
@@ -164,7 +165,7 @@ The status bar shows `◉ WATCH` when active. A notification fires before each r
 
 ### Status bar
 
-The status bar shows live scan progress — `8/24` modules done, turning `✓ 24/24` green when complete. If any module fails it shows `✗ N errors` in red. In non-domain modes a mode badge and resolved domain appear next to the target.
+The status bar shows live scan progress — `8/25` modules done, turning `✓ 25/25` green when complete. If any module fails it shows `✗ N errors` in red. In non-domain modes a mode badge and resolved domain appear next to the target.
 
 ### Panel headers
 
@@ -221,6 +222,21 @@ STEP 2  CREDENTIAL STUFFING  HIGH
         "/login:username=^USER^&password=^PASS^:Invalid"
 ```
 
+## Email mode
+
+Run with `-e` to target a specific email address. All domain modules run on the extracted domain, and the following panels receive the full email address:
+
+| Panel | What it does with the email |
+|---|---|
+| Email Intel | EmailRep.io reputation, breach flags, social profiles; Gravatar profile, linked accounts |
+| Hunter.io | Email verifier — deliverability, MX host, disposable/webmail/gibberish detection |
+| Breach Intel | HIBP breach lookup on the email's domain |
+| Dark Web | IntelX, BreachDirectory, and Dehashed all query the exact email address |
+
+```bash
+meridian -e ceo@example.com -y
+```
+
 ## Person Intel
 
 The **Person Intel** panel (activated with `-p "Full Name"`) gathers OSINT on a named individual:
@@ -263,7 +279,7 @@ The **Dark Web** panel (Offensive tab) queries up to three breach intelligence s
 | BreachDirectory | Email:password and email:hash pairs from public dumps | `RAPIDAPI_KEY` |
 | Dehashed | 15B+ records — plaintext passwords, hashed passwords, usernames, database names | `DEHASHED_API_KEY` |
 
-In email mode (`-e`), the Dark Web panel receives the full email address instead of the domain.
+In email mode (`-e`), all three sources receive the full email address. Dehashed queries `email:<address>` instead of `domain:<domain>`.
 
 ## DNS History
 
@@ -285,15 +301,16 @@ The **CVE Correlation** panel (Network tab) waits for URLScan.io and Shodan to f
 Press `j` to save a machine-readable report:
 
 ```bash
-jq '.modules.crtsh.findings[]'     meridian_example_com_*.json  # subdomains
+jq '.modules.crtsh.findings[]'      meridian_example_com_*.json  # subdomains
 jq '.modules.dnshistory.findings[]' meridian_example_com_*.json  # DNS history
-jq '.modules.buckets.findings[]'   meridian_example_com_*.json  # cloud buckets
-jq '.modules.cve.findings[]'       meridian_example_com_*.json  # CVE matches
-jq '.modules.darkweb.findings[]'   meridian_example_com_*.json  # dark web
-jq '.modules.exploits.findings[]'  meridian_example_com_*.json  # exploit commands
-jq '.modules.brief.findings[]'     meridian_example_com_*.json  # attack brief
-jq '.modules.person.findings[]'    meridian_example_com_*.json  # person intel
-jq -r '.modules.crtsh.findings[]'  meridian_example_com_*.json | ffuf ...
+jq '.modules.buckets.findings[]'    meridian_example_com_*.json  # cloud buckets
+jq '.modules.cve.findings[]'        meridian_example_com_*.json  # CVE matches
+jq '.modules.darkweb.findings[]'    meridian_example_com_*.json  # dark web
+jq '.modules.exploits.findings[]'   meridian_example_com_*.json  # exploit commands
+jq '.modules.brief.findings[]'      meridian_example_com_*.json  # attack brief
+jq '.modules.email_intel.findings[]' meridian_example_com_*.json # email intel
+jq '.modules.person.findings[]'     meridian_example_com_*.json  # person intel
+jq -r '.modules.crtsh.findings[]'   meridian_example_com_*.json | ffuf ...
 ```
 
 ## API keys
@@ -303,7 +320,7 @@ jq -r '.modules.crtsh.findings[]'  meridian_example_com_*.json | ffuf ...
 | `SHODAN_API_KEY` | [account.shodan.io](https://account.shodan.io/) | Free | Host enumeration, open ports, CVEs, DNS subdomains |
 | `VT_API_KEY` | [virustotal.com/gui/my-apikey](https://www.virustotal.com/gui/my-apikey) | Free | Detections, reputation, historical IPs, subdomains |
 | `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) (public_repo scope) | Free | Code search dorks + GitHub org member enumeration + person intel |
-| `HUNTER_API_KEY` | [hunter.io/users/sign_up](https://hunter.io/users/sign_up) | Free | Email discovery, employee scoring, org intel |
+| `HUNTER_API_KEY` | [hunter.io/users/sign_up](https://hunter.io/users/sign_up) | Free | Email discovery, employee scoring, org intel, email verifier |
 | `APOLLO_API_KEY` | [apollo.io](https://apollo.io) | Free (75 credits/mo) | Employee names, titles, LinkedIn URLs |
 | `INTELX_API_KEY` | [intelx.io](https://intelx.io) | Free (10 searches/mo) | Dark web mentions, paste sites, ransomware leaks |
 | `RAPIDAPI_KEY` | [rapidapi.com](https://rapidapi.com) → BreachDirectory | Free (50 req/mo) | Email:password pairs from public dumps |
