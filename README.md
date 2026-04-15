@@ -1,4 +1,4 @@
-# Meridian `v0.82.0`
+# Meridian `v0.85.0`
 
 > ⚠️ **LEGAL DISCLAIMER — READ BEFORE USE**
 >
@@ -153,6 +153,9 @@ The status bar shows `◉ WATCH` when active. A notification fires before each r
 |---|---|
 | `1` / `2` / `3` / `4` / `5` | Switch tabs (Network / Web / Offensive / Brief / Exploit) |
 | `n` | Jump to next tab that has findings |
+| `b` | Jump to previous tab |
+| `g` | Scroll all panels in the active tab to the top |
+| `G` | Scroll all panels in the active tab to the bottom |
 | `t` | Cycle through all available themes |
 | `s` | Save plain-text report to `meridian_<target>_<timestamp>.txt` |
 | `j` | Save JSON report to `meridian_<target>_<timestamp>.json` |
@@ -166,6 +169,26 @@ The status bar shows `◉ WATCH` when active. A notification fires before each r
 ### Status bar
 
 The status bar shows live scan progress — `8/25` modules done, turning `✓ 25/25` green when complete. If any module fails it shows `✗ N errors` in red. In non-domain modes a mode badge and resolved domain appear next to the target.
+
+### Tab badges
+
+Tab labels update live as findings arrive — `Offensive (47)`, `Network (12)` — so you can see where the action is without switching tabs. Counts reset when you re-run with `r`.
+
+### Critical finding alerts
+
+Meridian automatically fires toast notifications when high-value indicators are detected:
+
+| Trigger | Alert |
+|---|---|
+| Spoofable domain | Domain is spoofable — phishing ready |
+| Open cloud bucket | Open cloud storage bucket found! |
+| Leaked credentials on dark web | Leaked credentials on dark web |
+| Subdomain takeover candidate | Subdomain takeover candidates found |
+| JS secrets detected | JS secrets detected |
+| High-risk port exposed | High-risk service exposed |
+| Email credentials leaked | Email credentials leaked |
+
+A summary toast fires when all modules complete: `✓ Scan complete — N total findings`.
 
 ### Panel headers
 

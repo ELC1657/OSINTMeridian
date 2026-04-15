@@ -20,7 +20,7 @@ from textual.events import Click, Key
 from textual.reactive import reactive
 from textual.theme import Theme
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Header, Input, RichLog, Static, TabbedContent, TabPane
+from textual.widgets import Footer, Header, Input, RichLog, Static, Tab, TabbedContent, TabPane
 
 from .modules import (
     ASNModule,
@@ -565,6 +565,9 @@ class HelpScreen(ModalScreen[None]):
                 "\n"
                 " [dim]General[/dim]\n"
                 "   [bold cyan]n[/bold cyan]     Jump to next tab with findings\n"
+                "   [bold cyan]b[/bold cyan]     Jump to previous tab\n"
+                "   [bold cyan]g[/bold cyan]     Scroll panels to top\n"
+                "   [bold cyan]G[/bold cyan]     Scroll panels to bottom\n"
                 "   [bold cyan]?[/bold cyan]     This help screen\n"
                 "   [bold cyan]q[/bold cyan]     Quit\n"
                 "\n"
@@ -592,6 +595,28 @@ _TAB_PANELS: dict[str, set[str]] = {
     "tab-offensive": {"virustotal", "github", "hunter", "takeover", "breach", "employees", "darkweb", "email_intel"},
     "tab-brief":     {"brief", "playbook", "jsscan", "params"},
     "tab-exploit":   {"exploits"},
+}
+
+_TAB_LABELS: dict[str, str] = {
+    "tab-network":   "Network",
+    "tab-web":       "Web",
+    "tab-offensive": "Offensive",
+    "tab-brief":     "Brief",
+    "tab-exploit":   "Exploit",
+}
+
+# Alert rules: panel_id → [(substring to match in findings, toast message, severity)]
+_ALERT_RULES: dict[str, list[tuple[str, str, str]]] = {
+    "spoof":       [("SPOOFABLE", "Domain is spoofable — phishing ready", "warning")],
+    "takeover":    [("VULN", "Subdomain takeover candidates found", "warning")],
+    "breach":      [("breach(es) found", "Breach data in HIBP", "warning")],
+    "darkweb":     [("credential(s) found", "Leaked credentials on dark web", "error"),
+                   ("record(s) in Dehashed", "Records found in Dehashed", "warning")],
+    "buckets":     [("PUBLIC", "Open cloud storage bucket found!", "error")],
+    "jsscan":      [("Found", "JS secrets detected", "warning")],
+    "nmap":        [("HIGH-RISK", "High-risk service exposed", "warning")],
+    "email_intel": [("credentials_leaked", "Email credentials leaked", "warning"),
+                   ("Gravatar account found", "Gravatar profile found", "information")],
 }
 
 
@@ -725,6 +750,9 @@ class MeridianApp(App[None]):
         Binding("5", "switch_tab('tab-exploit')",    "Exploit",   show=False),
         Binding("p", "paste_exploit",                "Paste cmd", show=False),
         Binding("n", "next_finding_tab",             "Next tab",  show=False),
+        Binding("b", "prev_tab",                     "Prev tab",  show=False),
+        Binding("g", "scroll_top",                   "Top",       show=False),
+        Binding("G", "scroll_bottom",                "Bottom",    show=False),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
 
@@ -890,11 +918,22 @@ class MeridianApp(App[None]):
         except Exception:
             pass
 
-    def watch__done(self, _: int) -> None:
+    def watch__done(self, val: int) -> None:
         self._refresh_status_bar()
+        self._refresh_tab_labels()
+        total = len(self._module_map)
+        if val == total and total > 0:
+            count = 0
+            for _, pid, _ in self._module_map:
+                try:
+                    count += self.query_one(f"#panel-{pid}", ReconPanel).count
+                except Exception:
+                    pass
+            self.notify(f"✓ Scan complete — {count} total findings", timeout=5)
 
     def watch__errors(self, _: int) -> None:
         self._refresh_status_bar()
+        self._refresh_tab_labels()
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -1062,6 +1101,32 @@ class MeridianApp(App[None]):
             return
         panel.set_done()
         self._done += 1
+        self._fire_alert(panel_id, panel.export_lines())
+
+    def _fire_alert(self, panel_id: str, findings: list[str]) -> None:
+        """Show a toast if the panel contains a high-value indicator."""
+        rules = _ALERT_RULES.get(panel_id, [])
+        combined = " ".join(findings).lower()
+        for keyword, message, severity in rules:
+            if keyword.lower() in combined:
+                self.notify(f"⚠  {message}", severity=severity, timeout=7)  # type: ignore[arg-type]
+                return  # one alert per panel
+
+    def _refresh_tab_labels(self) -> None:
+        """Update tab label badges with current finding totals."""
+        for tab_id, panels in _TAB_PANELS.items():
+            total = 0
+            for pid in panels:
+                try:
+                    total += self.query_one(f"#panel-{pid}", ReconPanel).count
+                except Exception:
+                    pass
+            base = _TAB_LABELS.get(tab_id, tab_id)
+            label = f"{base}  ({total})" if total > 0 else base
+            try:
+                self.query_one(f"Tab#{tab_id}", Tab).label = label
+            except Exception:
+                pass
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
@@ -1131,9 +1196,47 @@ class MeridianApp(App[None]):
                 except Exception:
                     pass
 
+    def action_prev_tab(self) -> None:
+        """Jump to the previous tab."""
+        if self._target_mode == TargetMode.PERSON:
+            return
+        tc = self.query_one(TabbedContent)
+        current = tc.active
+        try:
+            idx = _TAB_ORDER.index(current)
+        except ValueError:
+            idx = 0
+        tc.active = _TAB_ORDER[(idx - 1) % len(_TAB_ORDER)]
+
+    def action_scroll_top(self) -> None:
+        """Scroll all panels in the active tab to the top."""
+        try:
+            pane = self.query_one(f"#{self.query_one(TabbedContent).active}")
+            for log in pane.query(RichLog):
+                if log.id != "term-log":
+                    log.scroll_home(animate=False)
+        except Exception:
+            pass
+
+    def action_scroll_bottom(self) -> None:
+        """Scroll all panels in the active tab to the bottom."""
+        try:
+            pane = self.query_one(f"#{self.query_one(TabbedContent).active}")
+            for log in pane.query(RichLog):
+                if log.id != "term-log":
+                    log.scroll_end(animate=False)
+        except Exception:
+            pass
+
     def action_rerun(self) -> None:
         self._done = 0
         self._errors = 0
+        # Reset tab labels
+        for tab_id, base in _TAB_LABELS.items():
+            try:
+                self.query_one(f"Tab#{tab_id}", Tab).label = base
+            except Exception:
+                pass
         for _, panel_id, _ in self._module_map:
             try:
                 panel = self.query_one(f"#panel-{panel_id}", ReconPanel)
@@ -1178,7 +1281,7 @@ class MeridianApp(App[None]):
         payload: dict = {
             "target": self.target,
             "date": datetime.now().isoformat(),
-            "version": "0.82.0",
+            "version": "0.85.0",
             "modules": {},
         }
 
