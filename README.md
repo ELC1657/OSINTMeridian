@@ -262,12 +262,41 @@ meridian -e ceo@example.com -y
 
 ## Person Intel
 
-The **Person Intel** panel (activated with `-p "Full Name"`) gathers OSINT on a named individual:
+The **Person Intel** panel (activated with `-p "Full Name"`) gathers OSINT on a named individual. The core checks require no API keys at all.
+
+### Platform presence (no key required)
+
+Generates up to six username variants from the name (`johnsmith`, `john.smith`, `jsmith`, `j.smith`, `smithjohn`, `john`) then checks all of them concurrently:
+
+| Platform | What it returns |
+|---|---|
+| Reddit | Profile URL, total karma |
+| Keybase | Profile URL, display name |
+| HackerNews | Profile URL, karma |
+| DEV.to | Profile URL, display name |
+| Docker Hub | Profile URL, full name |
+| npm | Profile URL |
+| Gravatar | Avatar presence on most likely email addresses |
+
+### Email permutations (no key required)
+
+Generates full `pattern@provider` addresses across gmail / outlook / yahoo for each pattern — `first.last`, `flast`, `firstl`, `first_last`, `last.first`, `first` — ready to copy into breach checkers or spray tools.
+
+### OSINT dork strings (no key required)
+
+Eight ready-to-paste Google/Bing queries:
+- `"John Smith" site:linkedin.com/in`
+- `"John Smith" site:twitter.com`
+- `"John Smith" filetype:pdf resume OR CV`
+- `"John Smith" "@gmail.com" OR "@outlook.com" OR "@yahoo.com"`
+- `"John Smith" password OR credentials site:github.com`
+- `"John Smith" site:pastebin.com OR site:paste.ee`
+
+### Optional key-based sources
 
 | Source | What it finds | Key |
 |---|---|---|
 | GitHub user search | Matching profiles — login, URL, relevance score | `GITHUB_TOKEN` |
-| Email permutations | Common patterns: `first.last`, `flast`, `firstl`, `first_last` | - |
 | Dehashed | Name-matched leaks — email, plaintext password, database | `DEHASHED_EMAIL` / `DEHASHED_API_KEY` |
 | GitHub code search | Source files that mention the person's name | `GITHUB_TOKEN` |
 
